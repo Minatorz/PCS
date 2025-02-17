@@ -10,6 +10,9 @@
 #include <SPI.h>
 #include <Preferences.h>
 #include <WiFi.h>
+#include <ESPAsyncWebServer.h>
+#include <AsyncTCP.h>
+#include <LittleFS.h>
 
 // *** ESP32 PIN DEFINITIONS ***
 #define BTN_START 36

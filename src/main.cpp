@@ -172,6 +172,10 @@ int wifiScrollOffset = 0;
 int wifiCurrentItem = 0;
 bool wifiFullyConnected = false;
 
+// WebSevrer Variables
+AsyncWebServer server(80);         // Create a webserver on port 80
+bool webServerStarted = false;       // Flag to start the server only once
+
 // ----------------------------------------------------------------
 //  Screen State Machine
 // ----------------------------------------------------------------
@@ -933,6 +937,29 @@ void checkWifiConnection() {
       UI::drawTextTopCenter("Connected!", 7, true, UI::COLOR_GREEN);
       UI::drawText("Successfully connected to: ", 10, 60, UI::COLOR_WHITE, 2);
       UI::drawText(selectedSSID.c_str(), 10, 80, UI::COLOR_YELLOW, 2);
+
+      if (!webServerStarted) {
+        if (!LittleFS.begin()) {
+          Serial.println("LittleFS mount failed, formatting...");
+          if (!LittleFS.format()) {
+            Serial.println("LittleFS format failed!");
+            return;
+          }
+          if (!LittleFS.begin()) {
+            Serial.println("LittleFS mount failed after formatting!");
+            return;
+          }
+        }
+        Serial.println("LittleFS mounted successfully");
+        server.serveStatic("/", LittleFS, "/");
+        server.onNotFound([](AsyncWebServerRequest *request){
+          request->send(LittleFS, "/index.html", "text/html");
+        });
+      }
+      server.begin();
+      webServerStarted = true;
+      Serial.println(F("WebServer Started"));
+
       delay(2000);
       setScreenState(ScreenState::HOME);
     }
