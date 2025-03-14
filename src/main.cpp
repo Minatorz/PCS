@@ -3,184 +3,19 @@
 // ----------------------------------------------------------------
 #include <Arduino.h>
 #include "config.h"
+#include "_midi.h"
 
 // ----------------------------------------------------------------
 //  Hardware Objects and Global Variables
 // ----------------------------------------------------------------
 Adafruit_ILI9341 tft(TFT_CS, TFT_DC, TFT_RST);
 XPT2046_Touchscreen ts(T_CS, T_IRQ);
-ESPNATIVEUSBMIDI usbmidi;     // For ESP32-S3 or boards supporting native USB
-MIDI_CREATE_INSTANCE(ESPNATIVEUSBMIDI, usbmidi, MIDI);
 Preferences preferences;
-
-// ----------------------------------------------------------------
-//  Data Structures
-// ----------------------------------------------------------------
-static const uint8_t MAX_SONG_NAME_LEN = 48;
-static const uint8_t MAX_SONGS         = 50;
-static const uint8_t MAX_PRESETS       = 10;  // e.g., 10 setlist slots
-
-// Structure holding information for a single song
-struct SongInfo {
-  byte  songIndex;        // Original song index from SysEx
-  int   changedIndex;     // Index after reordering
-  char  songName[MAX_SONG_NAME_LEN + 1]; // Song name (null terminated)
-  float locatorTime;      // Locator time in seconds
-
-  // Parse SysEx data for a single song.
-  bool getInfo(const byte *data, unsigned length) {
-    if (data[1] != 0x00 || data[2] != 0x01 || data[3] != 0x61) {
-      Serial.println(F("Invalid Manufacturer ID"));
-      return false;
-    }
-    if (data[4] != 0x00) {
-      Serial.println(F("Unknown message type"));
-      return false;
-    }
-    // Extract song index (ASCII '0'..'9' or fallback)
-    if (data[5] >= '0' && data[5] <= '9')
-      songIndex = data[5] - '0';
-    else
-      songIndex = data[5];
-      
-    // Extract song name
-    memset(songName, 0, sizeof(songName));
-    int i = 6, j = 0;
-    while (i < (int)length - 1 && data[i] != 0x00 && j < MAX_SONG_NAME_LEN) {
-      songName[j++] = (char)data[i++];
-    }
-    songName[j] = '\0';
-
-    // Check for valid separator and time bytes
-    if (data[i] != 0x00 || i + 1 >= (int)length - 1) {
-      Serial.println(F("Invalid format: Missing separator or time bytes"));
-      return false;
-    }
-    
-    // Parse the locator time string
-    i++;
-    char timeBuf[16];
-    memset(timeBuf, 0, sizeof(timeBuf));
-    int k = 0;
-    while (i < (int)length - 1 && data[i] != 0xF7 && k < 15) {
-      timeBuf[k++] = (char)data[i++];
-    }
-    timeBuf[k] = '\0';
-    locatorTime = atof(timeBuf);
-
-    Serial.print(F("Parsed Song: "));
-    Serial.print(songName);
-    Serial.print(F(" / Index: "));
-    Serial.print(songIndex);
-    Serial.print(F(" / Time: "));
-    Serial.println(locatorTime);
-    return true;
-  }
-};
-
-// Structure holding project information (project name plus list of songs)
-struct ProjectInfo {
-  char      projectName[MAX_SONG_NAME_LEN + 1];
-  SongInfo  songs[MAX_SONGS];
-  int       songCount;
-};
-
-// Structure representing a preset (setlist) with its project data
-struct Preset {
-  char        name[MAX_SONG_NAME_LEN + 1]; // User-chosen setlist name
-  ProjectInfo data;                        // Underlying project and songs
-};
-
-// ----------------------------------------------------------------
-//  Global Application State
-// ----------------------------------------------------------------
-Preset   loadedPreset;          // The currently loaded preset
-ProjectInfo currentProject;     // For scanning new songs from Ableton
-ProjectInfo selectedProject;    // User-selected subset of songs for editing
-int selectedPresetSlot = -1;    // Preset slot currently in use
-bool presetChanged = false;
-bool newSetlistScanned = false;
-
-// User selection / reordering state
-bool selectedSongs[MAX_SONGS] = {false};
-int  selectedTrackCount = 0;
-bool isReorderedSongsInitialized = false;
-bool isReordering = false;
-int  reorderTarget = -1;
-
-// Scanning state for songs received via SysEx
-bool songsReady = false;  // Signals that the end-of-song-list SysEx has been received
-
-// UI Navigation and Menu variables
-static const int NUM_MENU_ITEMS = 5;
-static const char menuItems[NUM_MENU_ITEMS][16] PROGMEM = {
-  "NEW SETLIST", "SELECT SETLIST", "EDIT SETLIST", "DELETE SETLIST", "EXIT"
-};
-
-static const int NUM_MENU2_ITEMS = 3;
-static const char menu2Items[NUM_MENU2_ITEMS][16] PROGMEM = {
-  "WiFi Settings", "Device Settings", "Back"
-};
-int currentMenu2Item = 0;  // Highlight index for Menu2
-
-static const int NUM_WIFI_MENU_ITEMS = 3;
-static const char wifiMenuItems[NUM_WIFI_MENU_ITEMS][16] PROGMEM = {
-  "WiFi Connect", "WiFi Properties", "Back"
-};
-int currentWifiMenuItem = 0;  // Highlight index for Wi-Fi sub-menu
-
-int  currentMenuItem = 0;
-int  scrollOffset = 0;       // For scrolling lists on the display
-int  totalTracks = 0;        // Total songs in loaded preset
-int  currentTrack = 0;       // Currently active track
-bool needsRedraw = true;
-int selectedHomeSongIndex = 0;
-
-enum MenuSelection { MENU1_SELECTED, MENU2_SELECTED };
-MenuSelection currentMenuSelection = MENU1_SELECTED;
-
-byte currentVolume = 0;      // Current volume level
-bool isPlaying = false;
-
-
-// On-screen keyboard variables
-static const char *specialKeys[] = { "^", "Space", "<-" };
-static const char keys[4][10] = {
-  {'1','2','3','4','5','6','7','8','9','0'},
-  {'q','w','e','r','t','y','u','i','o','p'},
-  {'a','s','d','f','g','h','j','k','l',';'},
-  {'z','x','c','v','b','n','m',',','.','/'}
-};
-bool isShifted = false;
-char setlistName[MAX_SONG_NAME_LEN + 1] = {0};
-
-// Button and encoder state tracking
-bool BtnStartState = false, BtnStopState = false;
-bool BtnStartLastState = false, BtnStopLastState = false;
-volatile int encoderPosition = 0;
-bool encoderLastState = true;
-bool encoderButtonState = true;
-
-// WiFi variables
-static const int MAX_WIFI_NETWORKS = 20; // Maximum number of networks to display
-String wifiSSIDs[MAX_WIFI_NETWORKS];
-int wifiRSSI[MAX_WIFI_NETWORKS];
-int wifiCount = 0;  // Number of networks found
-bool wifiScanInProgress = false;
-bool wifiScanDone = false;
-static const uint8_t MAX_WIFI_PASS_LEN = 32;
-char wifiPassword[MAX_WIFI_PASS_LEN + 1] = {0};
-String selectedSSID = "";
-int wifiScrollOffset = 0;
-int wifiCurrentItem = 0;
-bool wifiFullyConnected = false;
 
 // WebSevrer Variables
 AsyncWebServer server(80);         // Create a webserver on port 80
 AsyncWebSocket ws("/ws");
 bool webServerStarted = false;       // Flag to start the server only once
-
-unsigned long lastPingReplyTime = 0;
 
 // ----------------------------------------------------------------
 //  Screen State Machine
@@ -253,106 +88,6 @@ void setScreenState(ScreenState newState) {
   previousScreen = currentScreen;
   currentScreen = newState;
   updateScreen();
-}
-
-// ----------------------------------------------------------------
-//  MIDI Handling Class
-// ----------------------------------------------------------------
-class MIDIHandler {
-public:
-  static void begin() {
-    MIDI.begin(MIDI_CHANNEL_OMNI);
-    MIDI.setHandleSystemExclusive(handleSysEx);
-    usbmidi.begin();
-  }
-
-  // Handle incoming SysEx messages from Ableton
-  static void handleSysEx(byte *data, unsigned length) {
-    if (length < 6) {
-      Serial.println(F("⚠️ SysEx message too short. Ignoring."));
-      return;
-    }
-    if (data[1] != 0x00 || data[2] != 0x01 || data[3] != 0x61) {
-      Serial.println(F("Invalid Manufacturer ID."));
-      return;
-    }
-    // Project name message (0x02)
-    if (data[4] == 0x02) {
-      memset(currentProject.projectName, 0, sizeof(currentProject.projectName));
-      int i = 5, j = 0;
-      while (i < (int)length - 1 && data[i] != 0x00 && j < MAX_SONG_NAME_LEN) {
-        currentProject.projectName[j++] = (char)data[i++];
-      }
-      currentProject.projectName[j] = '\0';
-      Serial.print(F("Project Name Received: "));
-      Serial.println(currentProject.projectName);
-      return;
-    }
-    // End-of-song list message: 0x00 followed by 0x7F
-    if (data[4] == 0x00 && data[5] == 0x7F) {
-      Serial.println(F("End signal received. Song list complete."));
-      Serial.print(F("Final total songs received: "));
-      Serial.println(currentProject.songCount);
-      songsReady = true;
-      return;
-    }
-
-    if (data[4] == 0x31) {
-      // Flash the LED to indicate a ping was received
-      lastPingReplyTime = millis();
-      Serial.println(F("Ping reply received"));
-      return;
-    }
-    // Otherwise, parse the song data
-    if (currentProject.songCount == 0) {
-      memset(&currentProject.songs[0], 0, sizeof(currentProject.songs));
-      currentProject.songCount = 0;
-    }
-    if (currentProject.songCount < MAX_SONGS) {
-      Serial.printf("Processing Song %d...\n", currentProject.songCount + 1);
-      if (currentProject.songs[currentProject.songCount].getInfo(data, length)) {
-        Serial.printf("Song %d added: %s\n",
-                      currentProject.songCount + 1,
-                      currentProject.songs[currentProject.songCount].songName);
-        currentProject.songCount++;
-      } else {
-        Serial.println(F("Failed to parse song info."));
-      }
-    } else {
-      Serial.println(F("Song list is full. Cannot add more songs."));
-    }
-  }
-
-  // Send a SysEx message for the selected song
-  static void sendSysExForSong(int selectedIndex) {
-    if (selectedIndex < 0 || selectedIndex >= loadedPreset.data.songCount) {
-      Serial.println(F("⚠️ Invalid song selection."));
-      return;
-    }
-    byte originalIndex = loadedPreset.data.songs[selectedIndex].songIndex;
-    Serial.println(originalIndex);
-    Serial.println(F("🎵 Sending SysEx for Song:"));
-    Serial.print(F("🎶 Index: "));
-    Serial.println(originalIndex);
-    byte sysexMessage[7] = {0xF0, 0x00, 0x01, 0x61, 0x01, originalIndex, 0xF7};
-    MIDI.sendSysEx(sizeof(sysexMessage), sysexMessage, true);
-  }
-
-  static void sendSysExForStop() {
-    // Construct a SysEx message for stopping playback.
-    // The bytes: F0 00 01 61 11 F7
-    // where 0x11 is our chosen command code for "stop".
-    byte sysexStopMessage[] = {0xF0, 0x00, 0x01, 0x61, 0x11, 0xF7};
-    MIDI.sendSysEx(sizeof(sysexStopMessage), sysexStopMessage, true);
-    Serial.println(F("Stop SysEx Command Sent"));
-  }  
-};
-
-// Function to send a ping SysEx message
-void sendPing() {
-  byte sysexPingMessage[] = {0xF0, 0x00, 0x01, 0x61, 0x30, 0xF7};
-  MIDI.sendSysEx(sizeof(sysexPingMessage), sysexPingMessage, true);
-  Serial.println(F("Ping SysEx sent"));
 }
 
 // ----------------------------------------------------------------
@@ -644,8 +379,7 @@ void newSetlistScreen() {
   // Send SysEx and wait for song list if not already scanned
   if (!newSetlistScanned) {
     unsigned long startTime = millis();
-    byte sysexMessage[] = {0xF0, 0x00, 0x01, 0x61, 0x10, 0xF7};
-    MIDI.sendSysEx(sizeof(sysexMessage), sysexMessage, true);
+    Midi::Scan();
     Serial.println(F("Sent SysEx to Notify Ableton"));
 
     memset(&currentProject, 0, sizeof(currentProject));
@@ -1520,7 +1254,7 @@ void buttonStartTask(void *pvParameters) {
         debouncedState = rawState;
         if (debouncedState) {
           isPlaying = true;
-          MIDIHandler::sendSysExForSong(currentTrack);
+          Midi::Play(currentTrack);
           Serial.println("Start Button Pressed");
           needsRedraw = true;
         } else {
@@ -1547,7 +1281,7 @@ void buttonStopTask(void *pvParameters) {
       if (rawState != debouncedState) {
         debouncedState = rawState;
         if (debouncedState) {
-          MIDIHandler::sendSysExForStop();
+          Midi::Stop();
           isPlaying = false;
           Serial.println("Stop Button Pressed: SysEx Stop Sent");
           needsRedraw = true;
@@ -1593,7 +1327,7 @@ void volumeControlTask(void *pvParameters) {
     if (midiVol != lastMidiVolume) {
       lastMidiVolume = midiVol;
       currentVolume = midiVol;
-      MIDI.sendControlChange(7, midiVol, 1);
+      Midi::volume(midiVol);
       if (currentScreen == ScreenState::HOME)
         displayVolume();
     }
@@ -1603,14 +1337,14 @@ void volumeControlTask(void *pvParameters) {
 
 void midiTask(void *pvParameters) {
   for (;;) {
-    MIDI.read();
+    Midi::read();
     vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
 
 void pingTask(void *pvParameters) {
   for (;;) {
-    sendPing();
+    Midi::Ping();
     
     // Check if a ping reply was received in the last 2 seconds
     if (millis() - lastPingReplyTime < 2000) {
@@ -1629,15 +1363,8 @@ void pingTask(void *pvParameters) {
 // ----------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
-
-  USB.productName("AbletonThesis");
-  if (!USB.begin()) {
-    Serial.println(F("USB Initialization Failed!"));
-    while (1);
-  }
-
   // Initialize MIDI
-  MIDIHandler::begin();
+  Midi::begin();
 
   // Configure pins
   pinMode(BTN_START, INPUT_PULLUP);
@@ -1662,7 +1389,7 @@ void setup() {
 
   // Initialize preferences
   preferences.begin("Setlists", false);
-  // preferences.clear(); // Uncomment to clear saved presets on boot if desired
+  preferences.clear(); // Uncomment to clear saved presets on boot if desired
   preferences.end();
   Serial.println(F("Ready to run."));
 
