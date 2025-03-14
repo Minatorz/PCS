@@ -62,6 +62,7 @@
 #define MENU_ITEM_WIDTH 200
 
 // *** 
+#define LED_PING 0
 
 // #define BUILTIN_LED
 

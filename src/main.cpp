@@ -134,11 +134,14 @@ int  scrollOffset = 0;       // For scrolling lists on the display
 int  totalTracks = 0;        // Total songs in loaded preset
 int  currentTrack = 0;       // Currently active track
 bool needsRedraw = true;
+int selectedHomeSongIndex = 0;
 
 enum MenuSelection { MENU1_SELECTED, MENU2_SELECTED };
 MenuSelection currentMenuSelection = MENU1_SELECTED;
 
 byte currentVolume = 0;      // Current volume level
+bool isPlaying = false;
+
 
 // On-screen keyboard variables
 static const char *specialKeys[] = { "^", "Space", "<-" };
@@ -174,7 +177,10 @@ bool wifiFullyConnected = false;
 
 // WebSevrer Variables
 AsyncWebServer server(80);         // Create a webserver on port 80
+AsyncWebSocket ws("/ws");
 bool webServerStarted = false;       // Flag to start the server only once
+
+unsigned long lastPingReplyTime = 0;
 
 // ----------------------------------------------------------------
 //  Screen State Machine
@@ -290,6 +296,13 @@ public:
       songsReady = true;
       return;
     }
+
+    if (data[4] == 0x31) {
+      // Flash the LED to indicate a ping was received
+      lastPingReplyTime = millis();
+      Serial.println(F("Ping reply received"));
+      return;
+    }
     // Otherwise, parse the song data
     if (currentProject.songCount == 0) {
       memset(&currentProject.songs[0], 0, sizeof(currentProject.songs));
@@ -324,11 +337,29 @@ public:
     byte sysexMessage[7] = {0xF0, 0x00, 0x01, 0x61, 0x01, originalIndex, 0xF7};
     MIDI.sendSysEx(sizeof(sysexMessage), sysexMessage, true);
   }
+
+  static void sendSysExForStop() {
+    // Construct a SysEx message for stopping playback.
+    // The bytes: F0 00 01 61 11 F7
+    // where 0x11 is our chosen command code for "stop".
+    byte sysexStopMessage[] = {0xF0, 0x00, 0x01, 0x61, 0x11, 0xF7};
+    MIDI.sendSysEx(sizeof(sysexStopMessage), sysexStopMessage, true);
+    Serial.println(F("Stop SysEx Command Sent"));
+  }  
 };
+
+// Function to send a ping SysEx message
+void sendPing() {
+  byte sysexPingMessage[] = {0xF0, 0x00, 0x01, 0x61, 0x30, 0xF7};
+  MIDI.sendSysEx(sizeof(sysexPingMessage), sysexPingMessage, true);
+  Serial.println(F("Ping SysEx sent"));
+}
 
 // ----------------------------------------------------------------
 //  Preset Manager Class (Handles saving/loading to NVS)
 // ----------------------------------------------------------------
+void notifyPresetUpdate();
+
 class PresetManager {
 public:
   static void savePresetToDevice(int presetNumber, const Preset &preset) {
@@ -408,6 +439,7 @@ public:
       Serial.print(F(", Locator Time: "));
       Serial.print(preset.data.songs[i].locatorTime, 6);
       Serial.println(F(")"));
+
     }
     preferences.end();
     return preset;
@@ -516,6 +548,16 @@ bool isTouch(int16_t tx, int16_t ty, int16_t areaX, int16_t areaY, int16_t w, in
 //  Screen Functions (State Handlers)
 // ----------------------------------------------------------------
 
+// WebSocket event handler (optional for logging)
+void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, 
+  AwsEventType type, void *arg, uint8_t *data, size_t len) {
+if (type == WS_EVT_CONNECT) {
+Serial.println("WebSocket client connected");
+} else if (type == WS_EVT_DISCONNECT) {
+Serial.println("WebSocket client disconnected");
+}
+}
+
 // 1) LOADING SCREEN
 void loadingScreen() {
   tft.fillScreen(UI::COLOR_BLACK);
@@ -564,11 +606,13 @@ void homeScreen() {
       UI::drawText("No tracks available.", 10, 80, UI::COLOR_RED, 3);
     } else {
       UI::drawText((String("Preset: ") + loadedPreset.name).c_str(), 10, 80, UI::COLOR_YELLOW, 2);
+      uint16_t songColor = isPlaying ? UI::COLOR_GREEN : UI::COLOR_WHITE;
       UI::drawText(String(loadedPreset.data.songs[currentTrack].songName).c_str(),
-                   10, 100, UI::COLOR_WHITE, 3);
+                    10, 100, songColor, 3);
       UI::drawText((String(currentTrack + 1) + "/" + String(totalTracks)).c_str(),
                    tft.width() - 60, 100, UI::COLOR_WHITE, 2);
     }
+    notifyPresetUpdate();
   } else {
     UI::drawText("No Preset Selected", 10, 80, UI::COLOR_RED, 2);
   }
@@ -618,6 +662,7 @@ void newSetlistScreen() {
     }
     newSetlistScanned = true;
   }
+  isReorderedSongsInitialized = false;
   delay(50);
 
   // Display scanned songs list
@@ -931,12 +976,14 @@ void checkWifiConnection() {
   if (currentScreen == ScreenState::MENU2_WIFICONNECTING) {
     if (WiFi.status() == WL_CONNECTED && !wifiFullyConnected) {
       wifiFullyConnected = true;
-      pinMode(BUILTIN_LED, OUTPUT);
       digitalWrite(BUILTIN_LED, HIGH);
       tft.fillScreen(UI::COLOR_BLACK);
       UI::drawTextTopCenter("Connected!", 7, true, UI::COLOR_GREEN);
       UI::drawText("Successfully connected to: ", 10, 60, UI::COLOR_WHITE, 2);
       UI::drawText(selectedSSID.c_str(), 10, 80, UI::COLOR_YELLOW, 2);
+
+      ws.onEvent(onWsEvent);
+      server.addHandler(&ws);
 
       if (!webServerStarted) {
         if (!LittleFS.begin()) {
@@ -1082,6 +1129,7 @@ void handleTouch() {
             Serial.print(F("✅ Setlist Saved in: "));
             Serial.println(selectedPresetSlot);
             loadedPreset = PresetManager::loadPresetFromDevice(selectedPresetSlot);
+            isReorderedSongsInitialized = false;
             setScreenState(ScreenState::HOME);
           }
           else {
@@ -1471,8 +1519,10 @@ void buttonStartTask(void *pvParameters) {
       if (rawState != debouncedState) {
         debouncedState = rawState;
         if (debouncedState) {
+          isPlaying = true;
           MIDIHandler::sendSysExForSong(currentTrack);
           Serial.println("Start Button Pressed");
+          needsRedraw = true;
         } else {
           Serial.println("Start Button Released");
         }
@@ -1497,11 +1547,10 @@ void buttonStopTask(void *pvParameters) {
       if (rawState != debouncedState) {
         debouncedState = rawState;
         if (debouncedState) {
-          MIDI.sendNoteOn(61, 127, 1);
-          Serial.println("Stop Button Pressed");
-        } else {
-          MIDI.sendNoteOff(61, 0, 1);
-          Serial.println("Stop Button Released");
+          MIDIHandler::sendSysExForStop();
+          isPlaying = false;
+          Serial.println("Stop Button Pressed: SysEx Stop Sent");
+          needsRedraw = true;
         }
       }
     }
@@ -1559,6 +1608,22 @@ void midiTask(void *pvParameters) {
   }
 }
 
+void pingTask(void *pvParameters) {
+  for (;;) {
+    sendPing();
+    
+    // Check if a ping reply was received in the last 2 seconds
+    if (millis() - lastPingReplyTime < 2000) {
+      digitalWrite(LED_PING, HIGH);  // Connection is active: LED on
+    } else {
+      digitalWrite(LED_PING, LOW);   // No recent reply: LED off
+    }
+    
+    vTaskDelay(pdMS_TO_TICKS(1000));  // Wait 1 second before sending the next ping
+  }
+}
+
+
 // ----------------------------------------------------------------
 //  Setup and Main Loop
 // ----------------------------------------------------------------
@@ -1580,6 +1645,10 @@ void setup() {
   pinMode(BTN_LEFT, INPUT_PULLUP);
   pinMode(BTN_RIGHT, INPUT_PULLUP);
   pinMode(POT_VOL, INPUT);
+  pinMode(BUILTIN_LED, OUTPUT);
+  digitalWrite(BUILTIN_LED, LOW);
+  pinMode(LED_PING, OUTPUT);
+  digitalWrite(LED_PING, LOW);
 
   // Initialize touch
   if (!ts.begin()) {
@@ -1593,7 +1662,7 @@ void setup() {
 
   // Initialize preferences
   preferences.begin("Setlists", false);
-  preferences.clear(); // Uncomment to clear saved presets on boot if desired
+  // preferences.clear(); // Uncomment to clear saved presets on boot if desired
   preferences.end();
   Serial.println(F("Ready to run."));
 
@@ -1608,6 +1677,7 @@ void setup() {
   xTaskCreatePinnedToCore(buttonTask, "BtnNavTask", 4096, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(volumeControlTask, "VolumeCtrlTask", 2048, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(midiTask, "MIDI Task", 2048, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(pingTask, "PingTask", 2048, NULL, 1, NULL, 1);
 }
 
 void loop() {
@@ -1616,5 +1686,33 @@ void loop() {
   handleEncoder();
   checkWifiScan();
   checkWifiConnection();
+
+  if (needsRedraw) {
+    updateScreen();
+    needsRedraw = false;
+  }
+
   delay(10);  // Yield time to other tasks
+}
+
+void notifyPresetUpdate() {
+  // Build a JSON string with preset data
+  String json = "{";
+  json += "\"name\":\"" + String(loadedPreset.name) + "\",";
+  json += "\"projectName\":\"" + String(loadedPreset.data.projectName) + "\",";
+  json += "\"songCount\":" + String(loadedPreset.data.songCount) + ",";
+  json += "\"songs\":[";
+  for (int i = 0; i < loadedPreset.data.songCount; i++) {
+    json += "{";
+    json += "\"songName\":\"" + String(loadedPreset.data.songs[i].songName) + "\",";
+    json += "\"songIndex\":" + String(loadedPreset.data.songs[i].songIndex);
+    json += "}";
+    if (i < loadedPreset.data.songCount - 1)
+      json += ",";
+  }
+  json += "]}";
+  
+  // Broadcast the JSON message to all connected WebSocket clients
+  ws.textAll(json);
+  Serial.println("Preset updated and broadcasted: " + json);
 }

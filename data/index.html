@@ -1,10 +1,62 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>AbletonThesis Control</title>
-  </head>
-  <body>
-    <h1>Device Control Interface</h1>
-    <p>The ESP device is now hosting this page via LittleFS.</p>
-  </body>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AbletonThesis Home</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      background-color: #000;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+    .info { margin: 20px; }
+    .info p { margin: 5px 0; font-size: 1.2em; }
+  </style>
+</head>
+<body>
+  <h1>Home Page</h1>
+  <div class="info">
+    <p>Preset: <span id="presetName">No Preset Selected</span></p>
+    <p>Project: <span id="projectName">N/A</span></p>
+    <p>Song Count: <span id="songCount">0</span></p>
+    <div id="songsList"></div>
+  </div>
+  <script>
+    // Connect to the WebSocket server on the same host
+    const socket = new WebSocket(`ws://${window.location.hostname}/ws`);
+
+    socket.onopen = () => {
+      console.log("WebSocket connected");
+    };
+
+    socket.onerror = (err) => {
+      console.error("WebSocket error", err);
+    };
+
+    // When a message is received, update the webpage
+    socket.onmessage = function(event) {
+      try {
+        const data = JSON.parse(event.data);
+        document.getElementById("presetName").innerText = data.name;
+        document.getElementById("projectName").innerText = data.projectName;
+        document.getElementById("songCount").innerText = data.songCount;
+        
+        // Update song list
+        const songsListDiv = document.getElementById("songsList");
+        songsListDiv.innerHTML = ""; // Clear current list
+        data.songs.forEach((song, index) => {
+          const p = document.createElement("p");
+          p.innerText = `${index + 1}. ${song.songName} (Index: ${song.songIndex})`;
+          songsListDiv.appendChild(p);
+        });
+      } catch (e) {
+        console.error("Error parsing JSON:", e);
+      }
+    };
+  </script>
+</body>
 </html>
