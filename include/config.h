@@ -2,9 +2,6 @@
 #define CONFIG_H
 
 #include <Arduino.h>
-#include <Adafruit_ILI9341.h>
-#include <XPT2046_Touchscreen.h>
-#include <SPI.h>
 #include <Preferences.h>
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
@@ -94,6 +91,8 @@ extern int  reorderTarget;
 extern bool songsReady;  // Signals that the end-of-song-list SysEx has been received
 
 extern unsigned long lastPingReplyTime;
+
+extern bool webServerStarted;  
 
 // UI Navigation and Menu variables
 extern int currentMenuItem;

@@ -1,5 +1,4 @@
 #include "config.h"
-#include <Arduino.h>
 
 // -----------------------------------------------------
 // Global Variable Definitions
@@ -17,6 +16,8 @@ int  reorderTarget = -1;
 bool songsReady = false;
 
 unsigned long lastPingReplyTime = 0;
+
+bool webServerStarted = false;  
 
 int currentMenuItem = 0;
 int scrollOffset = 0;

@@ -1,9 +1,6 @@
 #include "_midi.h"
 
-
-// Use the default MIDI instance.
-// This macro creates a global MIDI instance named "MIDI".
-ESPNATIVEUSBMIDI usbmidi;     // For ESP32-S3 or boards supporting native USB
+ESPNATIVEUSBMIDI usbmidi;
 MIDI_CREATE_INSTANCE(ESPNATIVEUSBMIDI, usbmidi, MIDI)
 
 void Midi::begin() {
@@ -52,7 +49,7 @@ void Midi::handleSysEx(byte *data, unsigned length) {
     if (data[4] == 0x31) {
         // Flash the LED to indicate a ping was received
         lastPingReplyTime = millis();
-        Serial.println(F("Ping reply received"));
+        // Serial.println(lastPingReplyTime);
         return;
     }
 
@@ -101,7 +98,6 @@ void Midi::Stop() {
 void Midi::Ping() {
     byte sysexPingMessage[] = { 0xF0, 0x00, 0x01, 0x61, 0x30, 0xF7 };
     MIDI.sendSysEx(sizeof(sysexPingMessage), sysexPingMessage, true);
-    Serial.println(F("Ping SysEx sent"));
 }
 
 void Midi::read() {
