@@ -38,6 +38,8 @@ public:
     // Change and update the current screen state.
     void setScreenState(ScreenState newState);
     ScreenState getScreenState() const;
+    ScreenState getPreviousScreenState() const;
+    void restorePreviousScreenState();
     void updateScreen();
 
     // Basic UI drawing functions.
@@ -64,10 +66,15 @@ public:
     void devicePropertiesScreen();
     void wifiPropertiesScreen();
 
+    bool getTouchCoordinates(int16_t &x, int16_t &y);
+
+    bool isTouch(int16_t x, int16_t y, int16_t areaX, int16_t areaY, int16_t width, int16_t height);
+
 private:
     Adafruit_ILI9341 tft;  // Reference to the display.
     XPT2046_Touchscreen ts;
     ScreenState currentState;  // Current screen state.
+    ScreenState previousState;
 };
 
 #endif

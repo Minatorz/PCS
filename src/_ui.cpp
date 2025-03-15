@@ -1,14 +1,16 @@
 #include "_ui.h"
 
 // Constructor: Initialize with the provided display.
-UI::UI() : tft(TFT_CS, TFT_DC, TFT_RST) , 
-                         ts(T_CS, T_IRQ) ,
-                         currentState(ScreenState::LOADING) {}
+UI::UI() :  tft(TFT_CS, TFT_DC, TFT_RST) , 
+            ts(T_CS, T_IRQ) ,
+            currentState(ScreenState::LOADING),
+            previousState(ScreenState::LOADING) {}
 
 // Set a new screen state and update the display.
 void UI::setScreenState(ScreenState newState) {
-  currentState = newState;
-  updateScreen();
+    previousState = currentState;
+    currentState = newState;
+    updateScreen();
 }
 
 void UI::init() {
@@ -22,6 +24,15 @@ void UI::init() {
 
 ScreenState UI::getScreenState() const {
   return currentState;
+}
+
+ScreenState UI::getPreviousScreenState() const {
+    return previousState;
+}
+
+void UI::restorePreviousScreenState() {
+    currentState = previousState;
+    updateScreen();
 }
 
 // Call the appropriate screen handler based on currentState.
@@ -476,4 +487,20 @@ void UI::wifiPropertiesScreen() {
 
     // Back button to return to Wi-Fi settings menu
     drawRectButton(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT, "Back");
+}
+
+bool UI::getTouchCoordinates(int16_t &x, int16_t &y) {
+    if (ts.touched()) {
+        TS_Point point = ts.getPoint();
+        // Adjust calibration values as needed.
+        x = map(point.x, 3800, 300, 0, tft.width());
+        y = map(point.y, 3800, 300, 0, tft.height());
+        return true;
+    }
+    return false;
+}
+
+// isTouch() checks if (x, y) is inside the given rectangle.
+bool UI::isTouch(int16_t x, int16_t y, int16_t areaX, int16_t areaY, int16_t width, int16_t height) {
+    return (x >= areaX && x < (areaX + width) && y >= areaY && y < (areaY + height));
 }

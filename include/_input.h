@@ -12,13 +12,9 @@ public:
   // Public interface to process touch input.
   void handleTouch();
 
-private:
-  // Private helper: reads raw touch coordinates and maps them to display coordinates.
-  bool touchHandler(int16_t &x, int16_t &y);
-  
-  // Private helper: returns true if (x, y) is within the specified rectangle.
-  bool isTouch(int16_t x, int16_t y, int16_t areaX, int16_t areaY, int16_t width, int16_t height);
+  void handleRotary();
 
+private:
   // References to the touchscreen and display.
   XPT2046_Touchscreen &ts;
   Adafruit_ILI9341 &tft;
