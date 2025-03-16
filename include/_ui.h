@@ -45,13 +45,6 @@ public:
     void restorePreviousScreenState();
     void updateScreen();
 
-    // Basic UI drawing functions.
-    void drawText(const char* text, int16_t x, int16_t y, uint16_t color = ILI9341_WHITE, uint8_t size = 2);
-    void drawTextCenter(const String &text, int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
-    void drawTextTopCenter(const char *text, int16_t yOffset = 7, bool underline = true, uint16_t textColor = ILI9341_WHITE);
-    void drawRectButton(int16_t x, int16_t y, int16_t w, int16_t h, const char* label, uint16_t color = ILI9341_WHITE);
-    void drawKeyboard(bool shifted);
-
     void displayVolume();
 
     void drawWiFiList();
@@ -83,6 +76,13 @@ private:
     XPT2046_Touchscreen ts;
     ScreenState currentState;  // Current screen state.
     ScreenState previousState;
+
+        // Basic UI drawing functions.
+    void drawText(const char* text, int16_t x, int16_t y, uint16_t color = ILI9341_WHITE, uint8_t size = 2);
+    void drawTextCenter(const String &text, int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
+    void drawTextTopCenter(const char *text, int16_t yOffset = 7, bool underline = true, uint16_t textColor = ILI9341_WHITE);
+    void drawRectButton(int16_t x, int16_t y, int16_t w, int16_t h, const char* label, uint16_t color = ILI9341_WHITE);
+    void drawKeyboard(bool shifted);
 };
 
 #endif

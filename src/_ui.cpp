@@ -505,12 +505,17 @@ void UI::menu2WifiSettingsScreen() {
 }
 
 void UI::menu2WifiConnectScreen() {
-    tft.fillScreen(ILI9341_BLACK);
-    drawTextTopCenter("Wi-Fi Connect", 7, true, ILI9341_WHITE);
-    drawRectButton(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT, "Back");
-    drawRectButton(NEXT_BUTTON_X, NEXT_BUTTON_Y, NEXT_BUTTON_WIDTH, NEXT_BUTTON_HEIGHT, "Re");
+    // Draw the static portion (header and navigation buttons) only once.
+    static bool staticDrawn = false;
+    if (!staticDrawn) {
+        tft.fillScreen(ILI9341_BLACK);
+        drawTextTopCenter("Wi-Fi Connect", 7, true, ILI9341_WHITE);
+        drawRectButton(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT, "Back");
+        drawRectButton(NEXT_BUTTON_X, NEXT_BUTTON_Y, NEXT_BUTTON_WIDTH, NEXT_BUTTON_HEIGHT, "Rescan");
+        staticDrawn = true;
+    }
 
-    // If scan hasn't started, start the asynchronous scan.
+    // Start a new Wi‑Fi scan if one hasn't been started.
     if (!wifiScanInProgress && !wifiScanDone) {
         Serial.println(F("Starting Async Wi-Fi Scan..."));
         WiFi.mode(WIFI_STA);
@@ -520,12 +525,12 @@ void UI::menu2WifiConnectScreen() {
         wifiScanInProgress = true;
     }
 
-    // If a scan is in progress, poll for its result.
+    // Poll for scan results while in progress.
     if (wifiScanInProgress) {
         int scanResult = WiFi.scanComplete();
-        if (scanResult >= 0) { // Scan complete
+        Serial.printf("Scan result: %d\n", scanResult);  // Debug print
+        if (scanResult >= 0) {  // Scan complete
             wifiCount = (scanResult < MAX_WIFI_NETWORKS) ? scanResult : MAX_WIFI_NETWORKS;
-            // Store SSIDs and RSSI values.
             for (int i = 0; i < wifiCount; i++) {
                 wifiSSIDs[i] = WiFi.SSID(i);
                 wifiRSSI[i] = WiFi.RSSI(i);
@@ -533,16 +538,16 @@ void UI::menu2WifiConnectScreen() {
             wifiScanDone = true;
             wifiScanInProgress = false;
         } else {
-            // Still scanning; show scanning message.
+            // Clear only the dynamic region and show a "Scanning..." message.
+            tft.fillRect(10, 60, tft.width() - 20, 160, ILI9341_BLACK);
             drawText("Scanning...", 10, 60, ILI9341_YELLOW, 2);
-            return; // Exit function until scan completes.
+            return;  // Exit until the scan completes.
         }
     }
 
-    // When scan is done, display networks.
-    if (wifiCount == 0) {
-        drawText("No Networks Found", 10, 60, ILI9341_RED, 2);
-    } else {
+    // Once the scan is complete, update only the dynamic region (Wi‑Fi list).
+    if (wifiScanDone) {
+        tft.fillRect(10, 60, tft.width() - 20, 160, ILI9341_BLACK);
         drawWiFiList();
     }
 }
@@ -610,10 +615,10 @@ void UI::wifiPropertiesScreen() {
     String status = (WiFi.status() == WL_CONNECTED) ? "Connected" : "Disconnected";
 
     // Display the details
-    // drawText("SSID: " + ssid, 10, 50, ILI9341_WHITE, 2);
-    // drawText("IP: " + ip, 10, 80, ILI9341_WHITE, 2);
-    // drawText("RSSI: " + String(rssi), 10, 110, ILI9341_WHITE, 2);
-    // drawText("Status: " + status, 10, 140, ILI9341_WHITE, 2);
+    drawText(("SSID: " + ssid).c_str(), 10, 50, ILI9341_WHITE, 2);
+    drawText(("IP: " + ip).c_str(), 10, 80, ILI9341_WHITE, 2);
+    drawText(("RSSI: " + String(rssi) + " dBm").c_str(), 10, 110, ILI9341_WHITE, 2);
+    drawText(("Status: " + status).c_str(), 10, 140, ILI9341_WHITE, 2);
 
     // Back button to return to Wi-Fi settings menu
     drawRectButton(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT, "Back");
