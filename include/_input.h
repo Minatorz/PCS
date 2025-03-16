@@ -3,6 +3,8 @@
 
 #include "_ui.h"      // Contains declaration of your UI class and ScreenState enum.
 #include "config.h"   // For pin definitions and global variables like BOX1_X, NUM_MENU_ITEMS, etc.
+#include "_midi.h"
+#include "_wifi.h"
 
 class Input {
 public:
@@ -14,13 +16,22 @@ public:
 
   void handleRotary();
 
+  void StartButton();
+
+  void StopButton();
+
+  void LeftButton();
+
+  void RightButton();
+
+  void handleVolume();
+
 private:
   // References to the touchscreen and display.
   XPT2046_Touchscreen &ts;
   Adafruit_ILI9341 &tft;
-  
-  // Pointer to the UI instance (to get and set screen state, call UI functions, etc.)
   UI *ui;
+
 };
 
 #endif // INPUT_H

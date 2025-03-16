@@ -1,4 +1,5 @@
 #include "_ui.h"
+#include "_preset.h"
 
 // Constructor: Initialize with the provided display.
 UI::UI() :  tft(TFT_CS, TFT_DC, TFT_RST) , 
@@ -127,21 +128,149 @@ void UI::drawRectButton(int16_t x, int16_t y, int16_t w, int16_t h, const char* 
 }
 
 void UI::drawKeyboard(bool shifted) {
-  // Example implementation of an on-screen keyboard.
-  int keyStartY = 88;
-  int keyHeight = 30;
-  int keyWidth = tft.width() / 10;
-  tft.fillRect(0, keyStartY, tft.width(), 5 * keyHeight, ILI9341_BLACK);
-  // For simplicity, draw keys labeled A to J.
-  for (int col = 0; col < 10; col++) {
-    int x = col * keyWidth;
-    int y = keyStartY;
-    tft.drawRect(x, y, keyWidth, keyHeight, ILI9341_WHITE);
-    char keyChar = 'A' + col;
-    if (shifted) keyChar = toupper(keyChar);
-    drawTextCenter(String(keyChar), x, y, keyWidth, keyHeight, ILI9341_WHITE);
+    int keyStartY = 88;              // Starting Y position for the keyboard
+    int keyHeight = 30;              // Height of each key
+    int keyWidth  = tft.width() / 10; // Divide the display width evenly for 10 keys
+
+    // Clear the keyboard area
+    tft.fillRect(0, keyStartY, tft.width(), 5 * keyHeight, ILI9341_BLACK);
+
+    // Draw 4 rows of keys (using the keys array defined in config)
+    for (int row = 0; row < 4; row++) {
+        for (int col = 0; col < 10; col++) {
+            int x = col * keyWidth;
+            int y = keyStartY + row * keyHeight;
+            // Draw key border
+            tft.drawRect(x, y, keyWidth, keyHeight, ILI9341_WHITE);
+            // Select the character: for rows after the first, if shifted then uppercase.
+            char displayKey = keys[row][col];
+            if (shifted && row > 0) {
+                displayKey = toupper(displayKey);
+            }
+            // Draw the character centered in the key.
+            drawTextCenter(String(displayKey), x, y, keyWidth, keyHeight, ILI9341_WHITE);
+        }
+    }
+
+    // Draw the 5th row for special keys:
+    // We assume specialKeys[0] is for Shift, specialKeys[1] for Space, and specialKeys[2] for Backspace.
+    drawRectButton(0, keyStartY + 4 * keyHeight, 2 * keyWidth, keyHeight, specialKeys[0]);
+    drawRectButton(2 * keyWidth, keyStartY + 4 * keyHeight, 6 * keyWidth, keyHeight, specialKeys[1]);
+    drawRectButton(8 * keyWidth, keyStartY + 4 * keyHeight, 2 * keyWidth, keyHeight, specialKeys[2]);
+
+    Serial.println("Keyboard drawn.");
+}
+
+void UI::displayVolume() {
+    static bool firstCall = true;
+    static byte lastVolume = 0;
+    int barX = 100;
+    int barY = 45;
+    int barWidth = 80;
+    int barHeight = 25;
+
+    // On the very first call, perform a full draw.
+    if (firstCall) {
+        lastVolume = currentVolume;
+        firstCall = false;
+        int filledWidth = map(currentVolume, 0, 127, 0, barWidth);
+        // Draw the filled portion.
+        tft.fillRect(barX, barY, filledWidth, barHeight, ILI9341_GREEN);
+        // Clear the remaining area.
+        tft.fillRect(barX + filledWidth, barY, barWidth - filledWidth, barHeight, ILI9341_BLACK);
+        // Draw the border.
+        tft.drawRect(barX, barY, barWidth, barHeight, ILI9341_WHITE);
+        return;
+    }
+
+    // Calculate the filled widths for current and previous volumes.
+    int filledWidth = map(currentVolume, 0, 127, 0, barWidth);
+    int lastFilledWidth = map(lastVolume, 0, 127, 0, barWidth);
+
+    if (filledWidth > lastFilledWidth) {
+        // Volume increased: fill only the extra portion.
+        tft.fillRect(barX + lastFilledWidth, barY, filledWidth - lastFilledWidth, barHeight, ILI9341_GREEN);
+    } else if (filledWidth < lastFilledWidth) {
+        // Volume decreased: clear only the removed portion.
+        tft.fillRect(barX + filledWidth, barY, lastFilledWidth - filledWidth, barHeight, ILI9341_BLACK);
+    }
+    
+    // Always redraw the border.
+    tft.drawRect(barX, barY, barWidth, barHeight, ILI9341_WHITE);
+  
+    lastVolume = currentVolume;
+}
+
+void UI::drawWiFiList() {
+    tft.fillRect(10, 60, tft.width() - 20, 160, ILI9341_BLACK);
+    const int itemsPerPage = 5;
+    const int lineSpacing = 30;
+    for (int i = 0; i < itemsPerPage && (i + wifiScrollOffset) < wifiCount; i++) {
+      int index = wifiScrollOffset + i;
+      int y = 60 + i * lineSpacing;
+      if (index == wifiCurrentItem)
+        tft.setTextColor(ILI9341_YELLOW, ILI9341_BLACK);
+      else
+        tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK);
+      tft.setTextSize(2);
+      tft.setCursor(10, y);
+      tft.print(String(index + 1) + ". " + wifiSSIDs[index]);
+  
+      int rssiVal = wifiRSSI[index];
+      int bars = map(rssiVal, -90, -30, 0, 5);
+      bars = constrain(bars, 0, 5);
+      int barWidth = 5, barHeight = 10, barSpacing = 3;
+      int barBaseX = tft.width() - 60, barBaseY = y;
+      for (int b = 0; b < 5; b++) {
+        int bx = barBaseX + b * (barWidth + barSpacing);
+        if (b < bars)
+          tft.fillRect(bx, barBaseY, barWidth, barHeight, ILI9341_GREEN);
+        else
+          tft.drawRect(bx, barBaseY, barWidth, barHeight, ILI9341_WHITE);
+      }
+    }
   }
-  // Special keys (e.g., Shift, Space, Backspace) can be drawn similarly.
+
+  void UI::checkWifiConnection() {
+    if (currentState == ScreenState::MENU2_WIFICONNECTING) {
+        if (WiFi.status() == WL_CONNECTED && !wifiFullyConnected) {
+            wifiFullyConnected = true;
+            digitalWrite(BUILTIN_LED, HIGH);
+            tft.fillScreen(ILI9341_BLACK);
+            drawTextTopCenter("Connected!", 7, true, ILI9341_GREEN);
+            drawText("Successfully connected to: ", 10, 60, ILI9341_WHITE, 2);
+            drawText(selectedSSID.c_str(), 10, 80, ILI9341_YELLOW, 2);
+
+            // ws.onEvent(onWsEvent);
+            // server.addHandler(&ws);
+
+            // if (!webServerStarted) {
+            //     Preferences prefs; // Create a local Preferences instance if needed.
+            //     if (!LittleFS.begin()) {
+            //         Serial.println("LittleFS mount failed, formatting...");
+            //         if (!LittleFS.format()) {
+            //             Serial.println("LittleFS format failed!");
+            //             return;
+            //         }
+            //         if (!LittleFS.begin()) {
+            //             Serial.println("LittleFS mount failed after formatting!");
+            //             return;
+            //         }
+            //     }
+            //     Serial.println("LittleFS mounted successfully");
+            //     server.serveStatic("/", LittleFS, "/");
+            //     server.onNotFound([](AsyncWebServerRequest *request) {
+            //         request->send(LittleFS, "/index.html", "text/html");
+            //     });
+            // }
+            // server.begin();
+            // webServerStarted = true;
+            // Serial.println(F("WebServer Started"));
+
+            delay(2000);
+            setScreenState(ScreenState::HOME);
+        }
+    }
 }
 
 // --- INTERFACE ---
@@ -166,7 +295,7 @@ void UI::homeScreen() {
     tft.drawRect(BOX2_X, BOX2_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_WHITE);
     drawTextCenter("2", BOX2_X, BOX2_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_WHITE);
 
-    // displayVolume();
+    UI::drawText("Volume: " ,10, 50, ILI9341_WHITE, 2);
 
     if (selectedPresetSlot != -1) {
         if (presetChanged) {
@@ -215,7 +344,7 @@ void UI::newSetlistScreen() {
     // Send SysEx and wait for song list if not already scanned
     if (!newSetlistScanned) {
         unsigned long startTime = millis();
-        // Midi::Scan();
+        Midi::Scan();
         Serial.println(F("Sent SysEx to Notify Ableton"));
 
         memset(&currentProject, 0, sizeof(currentProject));
@@ -329,18 +458,18 @@ void UI::selectSetlistScreen() {
     drawRectButton(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT, "Back");
     drawRectButton(SAVE_BUTTON_X, SAVE_BUTTON_Y, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT, "Save");
 
-    // preferences.begin("Setlists", true);
+    preferences.begin("Setlists", true);
     for (int i = 1; i <= MAX_PRESETS; i++) {
         int y = 50 + (i - 1) * 30;
         tft.setCursor(10, y);
         tft.setTextColor((i - 1) == currentMenuItem ? ILI9341_YELLOW : ILI9341_WHITE);
         tft.setTextSize(2);
-        // String presetName = preferences.getString(("p" + String(i) + "_name").c_str(), "No Preset");
+        String presetName = preferences.getString(("p" + String(i) + "_name").c_str(), "No Preset");
         tft.print(i);
         tft.print(". ");
-        // tft.print(presetName);
+        tft.print(presetName);
     }
-    // preferences.end();
+    preferences.end();
 }
 
 void UI::saveSetlistScreen() {
@@ -399,6 +528,7 @@ void UI::menu2WifiConnectScreen() {
     drawRectButton(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT, "Back");
     drawRectButton(NEXT_BUTTON_X, NEXT_BUTTON_Y, NEXT_BUTTON_WIDTH, NEXT_BUTTON_HEIGHT, "Re");
 
+    // If scan hasn't started, start the asynchronous scan.
     if (!wifiScanInProgress && !wifiScanDone) {
         Serial.println(F("Starting Async Wi-Fi Scan..."));
         WiFi.mode(WIFI_STA);
@@ -407,13 +537,31 @@ void UI::menu2WifiConnectScreen() {
         WiFi.scanNetworks(true);
         wifiScanInProgress = true;
     }
+
+    // If a scan is in progress, poll for its result.
     if (wifiScanInProgress) {
-        drawText("Scanning...", 10, 60, ILI9341_YELLOW, 2);
+        int scanResult = WiFi.scanComplete();
+        if (scanResult >= 0) { // Scan complete
+            wifiCount = (scanResult < MAX_WIFI_NETWORKS) ? scanResult : MAX_WIFI_NETWORKS;
+            // Store SSIDs and RSSI values.
+            for (int i = 0; i < wifiCount; i++) {
+                wifiSSIDs[i] = WiFi.SSID(i);
+                wifiRSSI[i] = WiFi.RSSI(i);
+            }
+            wifiScanDone = true;
+            wifiScanInProgress = false;
+        } else {
+            // Still scanning; show scanning message.
+            drawText("Scanning...", 10, 60, ILI9341_YELLOW, 2);
+            return; // Exit function until scan completes.
+        }
+    }
+
+    // When scan is done, display networks.
+    if (wifiCount == 0) {
+        drawText("No Networks Found", 10, 60, ILI9341_RED, 2);
     } else {
-    // if (wifiCount == 0)
-    //     drawText("No Networks Found", 10, 60, ILI9341_RED, 2);
-    // else 
-        // drawWifiList();
+        drawWiFiList();
     }
 }
 

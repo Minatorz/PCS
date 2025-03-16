@@ -2,8 +2,6 @@
 #define CONFIG_H
 
 #include <Arduino.h>
-#include <Preferences.h>
-#include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncTCP.h>
 #include <LittleFS.h>
@@ -57,7 +55,7 @@
 #define MENU_ITEM_Y 50
 #define MENU_ITEM_WIDTH 200
 
-#define LED_PING 0
+#define LED_PING 4  
 
 // -----------------------------------------------------
 // Compile-Time Constants (defined as macros)

@@ -5,7 +5,8 @@ Input::Input(XPT2046_Touchscreen &ts, Adafruit_ILI9341 &tft, UI *uiInstance)
 {
 }
 
-// Public function: processes a touch event (with debouncing) and updates UI state accordingly.
+
+
 void Input::handleTouch() {
     static bool wasTouched = false;
     static unsigned long lastTouchTime = 0;
@@ -494,3 +495,110 @@ void Input::handleRotary() {
     }
     encoderButtonState = btnState;
 }
+
+void Input::StartButton() {
+    static bool debouncedState = false;
+    static bool lastRawState = HIGH; // Assuming buttons are INPUT_PULLUP.
+    static unsigned long lastDebounceTime = 0;
+    const unsigned long debounceDelay = 20;
+
+    bool currentRawState = (digitalRead(BTN_START) == LOW);
+    if (currentRawState != lastRawState) {
+        lastDebounceTime = millis();
+        lastRawState = currentRawState;
+    }
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+        if (currentRawState != debouncedState) {
+            debouncedState = currentRawState;
+            if (debouncedState) {
+                isPlaying = true;
+                Midi::Play(loadedPreset.data.songs[currentTrack].songIndex);
+                needsRedraw = true;
+            }
+        }
+    }
+}
+
+void Input::StopButton() {
+    static bool debouncedState = false;
+    static bool lastRawState = false;
+    static unsigned long lastDebounceTime = 0;
+    const unsigned long debounceDelay = 20;
+
+    bool currentRawState = (digitalRead(BTN_STOP) == LOW);
+    if (currentRawState != lastRawState) {
+        lastDebounceTime = millis();
+        lastRawState = currentRawState;
+    }
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+        if (currentRawState != debouncedState) {
+            debouncedState = currentRawState;
+            if (debouncedState) {
+                Midi::Stop();
+                isPlaying = false;
+                needsRedraw = true;
+            }
+        }
+    }
+}
+
+void Input::LeftButton() {
+    static bool lastLeftState = HIGH;
+    static unsigned long lastPressTime = 0;
+    const unsigned long debounceDelay = 200; // milliseconds
+
+    bool btnLeftState = digitalRead(BTN_LEFT);
+    
+    // Check for a transition from not-pressed (HIGH) to pressed (LOW)
+    if (lastLeftState == HIGH && btnLeftState == LOW) {
+        if (millis() - lastPressTime > debounceDelay) {
+            // Trigger the event only once per press.
+            if (selectedPresetSlot != -1 && totalTracks > 0) {
+                currentTrack = (currentTrack - 1 + totalTracks) % totalTracks;
+                Serial.println(F("Moved to previous track"));
+            } else {
+                Serial.println(F("No tracks available to navigate (left)."));
+            }
+            lastPressTime = millis();
+        }
+    }
+    lastLeftState = btnLeftState;
+}
+
+void Input::RightButton() {
+    static bool lastRightState = HIGH;
+    static unsigned long lastPressTime = 0;
+    const unsigned long debounceDelay = 200; // milliseconds
+
+    bool btnRightState = digitalRead(BTN_RIGHT);
+    
+    // Check for a transition from HIGH to LOW.
+    if (lastRightState == HIGH && btnRightState == LOW) {
+        if (millis() - lastPressTime > debounceDelay) {
+            // Trigger the event only once per press.
+            if (selectedPresetSlot != -1 && totalTracks > 0) {
+                currentTrack = (currentTrack + 1) % totalTracks;
+                Serial.println(F("Moved to next track"));
+            } else {
+                Serial.println(F("No tracks available to navigate (right)."));
+            }
+            lastPressTime = millis();
+        }
+    }
+    lastRightState = btnRightState;
+}
+
+void Input::handleVolume() {
+    static byte lastMidiVolume = 255;
+    int potValue = analogRead(POT_VOL);
+    byte midiVol = map(potValue, 0, 4095, 0, 127);
+    
+    if (midiVol != lastMidiVolume) {
+      lastMidiVolume = midiVol;
+      currentVolume = midiVol;
+      // Call your MIDI volume function here; adjust as needed.
+      Midi::volume(midiVol);
+      if (ui->getScreenState() == ScreenState::HOME)
+        ui->displayVolume(); // Ensure displayVolume() exists in your UI class.
+    }
+  }

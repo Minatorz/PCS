@@ -5,6 +5,7 @@
 #include <Adafruit_ILI9341.h>
 #include <XPT2046_Touchscreen.h>
 #include <SPI.h>
+#include "_midi.h"
 
 // Define an enumeration for your screen states.
 enum class ScreenState {
@@ -48,6 +49,11 @@ public:
     void drawTextTopCenter(const char *text, int16_t yOffset = 7, bool underline = true, uint16_t textColor = ILI9341_WHITE);
     void drawRectButton(int16_t x, int16_t y, int16_t w, int16_t h, const char* label, uint16_t color = ILI9341_WHITE);
     void drawKeyboard(bool shifted);
+
+    void displayVolume();
+
+    void drawWiFiList();
+    void checkWifiConnection();
 
     // Screen state handlers—each function draws a particular screen.
     void loadingScreen();
