@@ -4,66 +4,11 @@
 #include "_ui.h"
 #include "_input.h"
 #include "_preset.h"
-
-// AsyncWebServer server(80);         // Create a webserver on port 80
-// AsyncWebSocket ws("/ws");
+#include "_webserver.h"
 
 UI ui;
 
 Input input(ui.getTouchscreen(), ui.getDisplay(), &ui);
-
-// void notifyPresetUpdate();
-
-// // WebSocket event handler (optional for logging)
-// void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, 
-//   AwsEventType type, void *arg, uint8_t *data, size_t len) {
-// if (type == WS_EVT_CONNECT) {
-// Serial.println("WebSocket client connected");
-// } else if (type == WS_EVT_DISCONNECT) {
-// Serial.println("WebSocket client disconnected");
-// }
-// }
-
-// void notifyPresetUpdate() {
-//   // Build a JSON string with preset data
-//   String json = "{";
-//   json += "\"name\":\"" + String(loadedPreset.name) + "\",";
-//   json += "\"projectName\":\"" + String(loadedPreset.data.projectName) + "\",";
-//   json += "\"songCount\":" + String(loadedPreset.data.songCount) + ",";
-//   json += "\"songs\":[";
-//   for (int i = 0; i < loadedPreset.data.songCount; i++) {
-//     json += "{";
-//     json += "\"songName\":\"" + String(loadedPreset.data.songs[i].songName) + "\",";
-//     json += "\"songIndex\":" + String(loadedPreset.data.songs[i].songIndex);
-//     json += "}";
-//     if (i < loadedPreset.data.songCount - 1)
-//       json += ",";
-//   }
-//   json += "]}";
-  
-//   // Broadcast the JSON message to all connected WebSocket clients
-//   ws.textAll(json);
-//   Serial.println("Preset updated and broadcasted: " + json);
-// }
-
-// void checkWifiScan() {
-//   if (wifiScanInProgress) {
-//     int done = WiFi.scanComplete();
-//     if (done >= 0) {
-//       wifiScanInProgress = false;
-//       wifiScanDone = true;
-//       wifiCount = min(done, MAX_WIFI_NETWORKS);
-//       for (int i = 0; i < wifiCount; i++) {
-//         wifiSSIDs[i] = WiFi.SSID(i);
-//         wifiRSSI[i] = WiFi.RSSI(i);
-//       }
-//       Serial.print("Async Wi-Fi scan complete. Found: ");
-//       Serial.println(done);
-//       if (currentScreen == ScreenState::MENU2_WIFICONNECT)
-//         menu2WifiConnectScreen();
-//     }
-//   }
-// }
 
 void midiTask(void *pvParameters) {
   for (;;) {

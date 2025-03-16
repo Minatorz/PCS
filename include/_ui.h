@@ -7,6 +7,7 @@
 #include <SPI.h>
 #include "_midi.h"
 #include "_preset.h"
+#include "_webserver.h"
 
 // Define an enumeration for your screen states.
 enum class ScreenState {

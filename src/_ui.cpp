@@ -1,5 +1,7 @@
 #include "_ui.h"
 
+AsyncWebServerManager webServerManager(80);
+
 // Constructor: Initialize with the provided display.
 UI::UI() :  tft(TFT_CS, TFT_DC, TFT_RST) , 
             ts(T_CS, T_IRQ) ,
@@ -240,31 +242,12 @@ void UI::drawWiFiList() {
             drawText("Successfully connected to: ", 10, 60, ILI9341_WHITE, 2);
             drawText(selectedSSID.c_str(), 10, 80, ILI9341_YELLOW, 2);
 
-            // ws.onEvent(onWsEvent);
-            // server.addHandler(&ws);
-
-            // if (!webServerStarted) {
-            //     Preferences prefs; // Create a local Preferences instance if needed.
-            //     if (!LittleFS.begin()) {
-            //         Serial.println("LittleFS mount failed, formatting...");
-            //         if (!LittleFS.format()) {
-            //             Serial.println("LittleFS format failed!");
-            //             return;
-            //         }
-            //         if (!LittleFS.begin()) {
-            //             Serial.println("LittleFS mount failed after formatting!");
-            //             return;
-            //         }
-            //     }
-            //     Serial.println("LittleFS mounted successfully");
-            //     server.serveStatic("/", LittleFS, "/");
-            //     server.onNotFound([](AsyncWebServerRequest *request) {
-            //         request->send(LittleFS, "/index.html", "text/html");
-            //     });
-            // }
-            // server.begin();
-            // webServerStarted = true;
-            // Serial.println(F("WebServer Started"));
+            static bool webServerSetupDone = false;
+            if (!webServerSetupDone) {
+                webServerManager.setup();
+                webServerSetupDone = true;
+            }
+            // webServerManager.update(); // This call is optional here.
 
             delay(2000);
             setScreenState(ScreenState::HOME);
