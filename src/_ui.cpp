@@ -236,7 +236,7 @@ void UI::drawWiFiList() {
     if (currentState == ScreenState::MENU2_WIFICONNECTING) {
         if (WiFi.status() == WL_CONNECTED && !wifiFullyConnected) {
             wifiFullyConnected = true;
-            digitalWrite(BUILTIN_LED, HIGH);
+            digitalWrite(LED_WIFI, HIGH);
             tft.fillScreen(ILI9341_BLACK);
             drawTextTopCenter("Connected!", 7, true, ILI9341_GREEN);
             drawText("Successfully connected to: ", 10, 60, ILI9341_WHITE, 2);

@@ -53,7 +53,8 @@
 #define MENU_ITEM_Y 50
 #define MENU_ITEM_WIDTH 200
 
-#define LED_PING 4  
+#define LED_PING 4 
+#define LED_WIFI 5
 
 // -----------------------------------------------------
 // Compile-Time Constants (defined as macros)
