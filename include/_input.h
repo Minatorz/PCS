@@ -4,7 +4,6 @@
 #include "_ui.h"      // Contains declaration of your UI class and ScreenState enum.
 #include "config.h"   // For pin definitions and global variables like BOX1_X, NUM_MENU_ITEMS, etc.
 #include "_midi.h"
-#include "_wifi.h"
 
 class Input {
 public:

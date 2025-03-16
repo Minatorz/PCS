@@ -4,48 +4,47 @@
 #include "_ui.h"
 #include "_input.h"
 #include "_preset.h"
-#include "_wifi.h"
 
-AsyncWebServer server(80);         // Create a webserver on port 80
-AsyncWebSocket ws("/ws");
+// AsyncWebServer server(80);         // Create a webserver on port 80
+// AsyncWebSocket ws("/ws");
 
 UI ui;
 
 Input input(ui.getTouchscreen(), ui.getDisplay(), &ui);
 
-void notifyPresetUpdate();
+// void notifyPresetUpdate();
 
-// WebSocket event handler (optional for logging)
-void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, 
-  AwsEventType type, void *arg, uint8_t *data, size_t len) {
-if (type == WS_EVT_CONNECT) {
-Serial.println("WebSocket client connected");
-} else if (type == WS_EVT_DISCONNECT) {
-Serial.println("WebSocket client disconnected");
-}
-}
+// // WebSocket event handler (optional for logging)
+// void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, 
+//   AwsEventType type, void *arg, uint8_t *data, size_t len) {
+// if (type == WS_EVT_CONNECT) {
+// Serial.println("WebSocket client connected");
+// } else if (type == WS_EVT_DISCONNECT) {
+// Serial.println("WebSocket client disconnected");
+// }
+// }
 
-void notifyPresetUpdate() {
-  // Build a JSON string with preset data
-  String json = "{";
-  json += "\"name\":\"" + String(loadedPreset.name) + "\",";
-  json += "\"projectName\":\"" + String(loadedPreset.data.projectName) + "\",";
-  json += "\"songCount\":" + String(loadedPreset.data.songCount) + ",";
-  json += "\"songs\":[";
-  for (int i = 0; i < loadedPreset.data.songCount; i++) {
-    json += "{";
-    json += "\"songName\":\"" + String(loadedPreset.data.songs[i].songName) + "\",";
-    json += "\"songIndex\":" + String(loadedPreset.data.songs[i].songIndex);
-    json += "}";
-    if (i < loadedPreset.data.songCount - 1)
-      json += ",";
-  }
-  json += "]}";
+// void notifyPresetUpdate() {
+//   // Build a JSON string with preset data
+//   String json = "{";
+//   json += "\"name\":\"" + String(loadedPreset.name) + "\",";
+//   json += "\"projectName\":\"" + String(loadedPreset.data.projectName) + "\",";
+//   json += "\"songCount\":" + String(loadedPreset.data.songCount) + ",";
+//   json += "\"songs\":[";
+//   for (int i = 0; i < loadedPreset.data.songCount; i++) {
+//     json += "{";
+//     json += "\"songName\":\"" + String(loadedPreset.data.songs[i].songName) + "\",";
+//     json += "\"songIndex\":" + String(loadedPreset.data.songs[i].songIndex);
+//     json += "}";
+//     if (i < loadedPreset.data.songCount - 1)
+//       json += ",";
+//   }
+//   json += "]}";
   
-  // Broadcast the JSON message to all connected WebSocket clients
-  ws.textAll(json);
-  Serial.println("Preset updated and broadcasted: " + json);
-}
+//   // Broadcast the JSON message to all connected WebSocket clients
+//   ws.textAll(json);
+//   Serial.println("Preset updated and broadcasted: " + json);
+// }
 
 // void checkWifiScan() {
 //   if (wifiScanInProgress) {
@@ -93,7 +92,6 @@ void pingTask(void *pvParameters) {
 // ----------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
-  // Initialize MIDI
   Midi::begin();
 
   // Configure pins
@@ -115,12 +113,10 @@ void setup() {
   // Initialize preferences
   ps::initPreferences();
 
-  // tft.fillScreen(UI::COLOR_BLACK);
 
   // Start with LOADING screen
   ui.updateScreen();
 
-  // xTaskCreatePinnedToCore(volumeControlTask, "VolumeCtrlTask", 2048, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(midiTask, "MIDI Task", 2048, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(pingTask, "PingTask", 2048, NULL, 1, NULL, 1);
 }
@@ -135,13 +131,7 @@ void loop() {
   input.RightButton();
   input.handleVolume();
   
-  // checkWifiScan();
   ui.checkWifiConnection();
-
-  // if (needsRedraw) {
-  //   updateScreen();
-  //   needsRedraw = false;
-  // }
 
   delay(10);  // Yield time to other tasks
 }

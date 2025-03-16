@@ -5,8 +5,6 @@ Input::Input(XPT2046_Touchscreen &ts, Adafruit_ILI9341 &tft, UI *uiInstance)
 {
 }
 
-
-
 void Input::handleTouch() {
     static bool wasTouched = false;
     static unsigned long lastTouchTime = 0;

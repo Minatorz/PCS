@@ -1,5 +1,4 @@
 #include "_preset.h"
-#include <Arduino.h>
 
 Preferences preferences;
 

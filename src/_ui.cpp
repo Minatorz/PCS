@@ -1,5 +1,4 @@
 #include "_ui.h"
-#include "_preset.h"
 
 // Constructor: Initialize with the provided display.
 UI::UI() :  tft(TFT_CS, TFT_DC, TFT_RST) , 

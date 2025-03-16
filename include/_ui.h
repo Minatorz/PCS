@@ -6,6 +6,7 @@
 #include <XPT2046_Touchscreen.h>
 #include <SPI.h>
 #include "_midi.h"
+#include "_preset.h"
 
 // Define an enumeration for your screen states.
 enum class ScreenState {
