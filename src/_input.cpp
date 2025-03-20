@@ -34,8 +34,8 @@ void Input::handleTouch() {
             for (int i = 0; i < NUM_MENU_ITEMS; i++) {
                 int y = 60 + i * 30;
                 if (ui->isTouch(tx, ty, 10, y, 220, 30)) {
-                currentMenuItem = i;  // Assuming currentMenuItem is global or accessible through ui.
-                switch (currentMenuItem) {
+                menu1Index = i;  // Assuming currentMenuItem is global or accessible through ui.
+                switch (menu1Index) {
                     case 0:
                     ui->setScreenState(ScreenState::NEW_SETLIST);
                     newSetlistScanned = false;
@@ -50,10 +50,9 @@ void Input::handleTouch() {
                     break;
                     case 2:
                     ui->setScreenState(ScreenState::EDIT_SETLIST);
-                    scrollOffset = 0;
                     break;
                     case 3:
-                    ui->setScreenState(ScreenState::HOME);
+                    ui->setScreenState(ScreenState::SELECT_SETLIST);
                     break;
                     case 4:
                     ui->setScreenState(ScreenState::HOME);
@@ -71,22 +70,50 @@ void Input::handleTouch() {
             } else {
                 int touchedIndex = (ty - 60) / 30 + scrollOffset;
                 if (touchedIndex >= 0 && touchedIndex < currentProject.songCount) {
-                currentMenuItem = touchedIndex;
                 selectedSongs[touchedIndex] = !selectedSongs[touchedIndex];
                 selectedTrackCount += selectedSongs[touchedIndex] ? 1 : -1;
-                ui->newSetlistScreen();  // Call UI's newSetlistScreen method.
+                ui->drawSongList();
+                ui->updateSelectedSongCount();
                 }
             }
             break;
             case ScreenState::EDIT_SETLIST:
-            if (ui->isTouch(tx, ty, BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT))
-                ui->setScreenState(ScreenState::NEW_SETLIST);
-            else if (ui->isTouch(tx, ty, SAVE_BUTTON_X, SAVE_BUTTON_Y, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT))
-                ui->setScreenState(ScreenState::SELECT_SETLIST);
-            break;
+                if (ui->isTouch(tx, ty, BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT)) {
+                    if (menu1Index == 2) {
+                        ui->setScreenState(ScreenState::MENU1);
+                    } else {
+                        ui->setScreenState(ScreenState::NEW_SETLIST);
+                    }
+                }
+                else if (ui->isTouch(tx, ty, SAVE_BUTTON_X, SAVE_BUTTON_Y, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT)) {
+                    // Serial.println(currentMenuItem);
+                    if (menu1Index == 2) {
+                        ui->setScreenState(ScreenState::SAVE_SETLIST);
+                    } else {
+                        ui->setScreenState(ScreenState::SELECT_SETLIST);
+                    }
+                }
+                else {
+                    // Assume the song list area starts at y = 60 and each item has height = 30.
+                    int touchedIndex = (ty - 60) / 30 + scrollOffset;
+                    if (touchedIndex >= 0 && touchedIndex < selectedProject.songCount) {
+                        // When a song is touched, set it as the reorder target and enable reordering mode.
+                        reorderTarget = touchedIndex;
+                        isReordering = true;
+                        // Redraw the song list to show the newly selected item as highlighted (green).
+                        ui->drawEditedSongList();
+                        return;
+                    }
+                }
+                break;
             case ScreenState::SELECT_SETLIST:
             if (ui->isTouch(tx, ty, BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT))
-                ui->setScreenState(ScreenState::MENU1);
+                if (menu1Index == 1 || menu1Index == 3) {
+                    ui->setScreenState(ScreenState::MENU1);
+                } else {
+                    ui->setScreenState(ScreenState::EDIT_SETLIST);
+                }
+                    
             else if (ui->isTouch(tx, ty, SAVE_BUTTON_X, SAVE_BUTTON_Y, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT))
                 ui->setScreenState(ScreenState::SAVE_SETLIST);
             else {
@@ -97,11 +124,14 @@ void Input::handleTouch() {
                     presetChanged = true;
                     Serial.print(F("✅ Selected Setlist Slot: "));
                     Serial.println(selectedPresetSlot);
-                    if (ui->getPreviousScreenState() == ScreenState::MENU1) {
-                    // loadedPreset = PresetManager::loadPresetFromDevice(selectedPresetSlot);
-                    ui->setScreenState(ScreenState::HOME);
+                    if (menu1Index == 1) {
+                    loadedPreset = ps::loadPresetFromDevice(selectedPresetSlot);
+                        ui->setScreenState(ScreenState::HOME);
+                    } else if (menu1Index == 3) {
+                        ps::deletePresetFromDevice(selectedPresetSlot);
+                        ui->setScreenState(ScreenState::HOME);
                     } else {
-                    ui->setScreenState(ScreenState::SAVE_SETLIST);
+                        ui->setScreenState(ScreenState::SAVE_SETLIST);
                     }
                     return;
                 }
@@ -109,68 +139,72 @@ void Input::handleTouch() {
             }
             break;
             case ScreenState::SAVE_SETLIST:
-            if (ui->isTouch(tx, ty, BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT))
-                ui->setScreenState(ScreenState::EDIT_SETLIST);
-            else if (ui->isTouch(tx, ty, SAVE_BUTTON_X, SAVE_BUTTON_Y, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT)) {
-                strcpy(loadedPreset.name, setlistName);
-                strcpy(loadedPreset.data.projectName, selectedProject.projectName);
-                loadedPreset.data.songCount = selectedTrackCount;
-                for (int i = 0; i < selectedTrackCount; i++) {
-                loadedPreset.data.songs[i] = selectedProject.songs[i];
-                loadedPreset.data.songs[i].songIndex = selectedProject.songs[i].songIndex;
-                loadedPreset.data.songs[i].changedIndex = selectedProject.songs[i].changedIndex;
-                }
-                // PresetManager::savePresetToDevice(selectedPresetSlot, loadedPreset);
-                Serial.print(F("✅ Setlist Saved in: "));
-                Serial.println(selectedPresetSlot);
-                // loadedPreset = PresetManager::loadPresetFromDevice(selectedPresetSlot);
-                isReorderedSongsInitialized = false;
-                ui->setScreenState(ScreenState::HOME);
-            }
-            else {
-                int keyWidth = tft.width() / 10;
-                int keyHeight = 30;
-                int keyStartY = 88;
-                for (int row = 0; row < 4; row++) {
-                for (int col = 0; col < 10; col++) {
-                    int keyX = col * keyWidth, keyY = keyStartY + row * keyHeight;
-                    if (ui->isTouch(tx, ty, keyX, keyY, keyWidth, keyHeight)) {
-                    char keyChar = (isShifted && row > 0) ? toupper(keys[row][col]) : keys[row][col];
-                    size_t curLen = strlen(setlistName);
-                    if (curLen < MAX_SONG_NAME_LEN) {
-                        setlistName[curLen] = keyChar;
-                        setlistName[curLen + 1] = '\0';
-                    }
-                    ui->updateScreen();
-                    return;
-                    }
-                }
-                }
-                // Handle special keys: SHIFT, SPACE, BACKSPACE
-                if (ui->isTouch(tx, ty, 0, keyStartY + 4 * keyHeight, 2 * keyWidth, keyHeight)) {
-                isShifted = !isShifted;
-                ui->updateScreen();
-                return;
-                }
-                if (ui->isTouch(tx, ty, 2 * keyWidth, keyStartY + 4 * keyHeight, 6 * keyWidth, keyHeight)) {
-                size_t curLen = strlen(setlistName);
-                if (curLen < MAX_SONG_NAME_LEN) {
-                    setlistName[curLen] = ' ';
-                    setlistName[curLen + 1] = '\0';
-                }
-                ui->updateScreen();
-                return;
-                }
-                if (ui->isTouch(tx, ty, 8 * keyWidth, keyStartY + 4 * keyHeight, 2 * keyWidth, keyHeight)) {
-                size_t curLen = strlen(setlistName);
-                if (curLen > 0) {
-                    setlistName[curLen - 1] = '\0';
-                }
-                ui->updateScreen();
-                return;
-                }
-            }
-            break;
+              if (ui->isTouch(tx, ty, BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT))
+                  ui->setScreenState(ScreenState::EDIT_SETLIST);
+              else if (ui->isTouch(tx, ty, SAVE_BUTTON_X, SAVE_BUTTON_Y, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT)) {
+                  strcpy(loadedPreset.name, setlistName);
+                  strcpy(loadedPreset.data.projectName, selectedProject.projectName);
+                  loadedPreset.data.songCount = selectedTrackCount;
+                  for (int i = 0; i < selectedTrackCount; i++) {
+                      loadedPreset.data.songs[i] = selectedProject.songs[i];
+                      loadedPreset.data.songs[i].songIndex = selectedProject.songs[i].songIndex;
+                      loadedPreset.data.songs[i].changedIndex = selectedProject.songs[i].changedIndex;
+                  }
+                  ps::savePresetToDevice(selectedPresetSlot, loadedPreset);
+                  Serial.print(F("✅ Setlist Saved in: "));
+                  Serial.println(selectedPresetSlot);
+                  isReorderedSongsInitialized = false;
+                  ui->setScreenState(ScreenState::HOME);
+              }
+              else if (ui->isTouch(tx, ty, CLEAR_BUTTON_X, CLEAR_BUTTON_Y, CLEAR_BUTTON_WIDTH, CLEAR_BUTTON_HEIGHT)) {
+                  setlistName[0] = '\0';
+                  ui->drawSetlistName();
+                  return;
+              }
+              else {
+                  int keyWidth = tft.width() / 10;
+                  int keyHeight = 30;
+                  int keyStartY = 88;
+                  for (int row = 0; row < 4; row++) {
+                      for (int col = 0; col < 10; col++) {
+                          int keyX = col * keyWidth, keyY = keyStartY + row * keyHeight;
+                          if (ui->isTouch(tx, ty, keyX, keyY, keyWidth, keyHeight)) {
+                              char keyChar = (isShifted && row > 0) ? toupper(keys[row][col]) : keys[row][col];
+                              size_t curLen = strlen(setlistName);
+                              if (curLen < MAX_SONG_NAME_LEN) {
+                                  setlistName[curLen] = keyChar;
+                                  setlistName[curLen + 1] = '\0';
+                              }
+                              ui->drawSetlistName();
+                              return;
+                          }
+                      }
+                  }
+                  // Handle special keys: SHIFT, SPACE, BACKSPACE
+                  if (ui->isTouch(tx, ty, 0, keyStartY + 4 * keyHeight, 2 * keyWidth, keyHeight)) {
+                      isShifted = !isShifted;
+                      ui->drawSetlistName();
+                      return;
+                  }
+                  if (ui->isTouch(tx, ty, 2 * keyWidth, keyStartY + 4 * keyHeight, 6 * keyWidth, keyHeight)) {
+                      size_t curLen = strlen(setlistName);
+                      if (curLen < MAX_SONG_NAME_LEN) {
+                          setlistName[curLen] = ' ';
+                          setlistName[curLen + 1] = '\0';
+                      }
+                      ui->drawSetlistName();
+                      return;
+                  }
+                  if (ui->isTouch(tx, ty, 8 * keyWidth, keyStartY + 4 * keyHeight, 2 * keyWidth, keyHeight)) {
+                      size_t curLen = strlen(setlistName);
+                      if (curLen > 0) {
+                          setlistName[curLen - 1] = '\0';
+                      }
+                      ui->drawSetlistName();
+                      return;
+                  }
+              }
+              break;
             case ScreenState::MENU2:
             for (int i = 0; i < NUM_MENU2_ITEMS; i++) {
                 int y = 60 + i * 30;
@@ -219,66 +253,80 @@ void Input::handleTouch() {
                 return;
             }
             else if (ui->isTouch(tx, ty, NEXT_BUTTON_X, NEXT_BUTTON_Y, NEXT_BUTTON_WIDTH, NEXT_BUTTON_HEIGHT)) {
-                WiFi.scanDelete();
-                WiFi.disconnect(true);
-                delay(50);
-                WiFi.scanNetworks(true);
-                wifiScanInProgress = true;
-                wifiScanDone = false;
-                ui->updateScreen();
+                ui->WifiScan();
                 return;
             }
             break;
-            case ScreenState::MENU2_WIFIPASS:
-            if (ui->isTouch(tx, ty, BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT)) {
-                ui->setScreenState(ScreenState::MENU2_WIFICONNECT);
-            } else if (ui->isTouch(tx, ty, SAVE_BUTTON_X, SAVE_BUTTON_Y, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT)) {
-                Serial.println("User clicked OK to confirm Wi-Fi password: ");
-                Serial.println(wifiPassword);
-                ui->setScreenState(ScreenState::MENU2_WIFICONFIRM);
-            } else {
+            case ScreenState::MENU2_WIFIPASS: {
                 int keyWidth = tft.width() / 10;
                 int keyHeight = 30;
                 int keyStartY = 88;
-                for (int row = 0; row < 4; row++) {
-                for (int col = 0; col < 10; col++) {
-                    int keyX = col * keyWidth, keyY = keyStartY + row * keyHeight;
-                    if (ui->isTouch(tx, ty, keyX, keyY, keyWidth, keyHeight)) {
-                    char keyChar = (isShifted && row > 0) ? toupper(keys[row][col]) : keys[row][col];
-                    size_t curLen = strlen(wifiPassword);
-                    if (curLen < MAX_WIFI_PASS_LEN) {
-                        wifiPassword[curLen] = keyChar;
-                        wifiPassword[curLen + 1] = '\0';
+            
+                if (ui->isTouch(tx, ty, BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT)) {
+                    ui->setScreenState(ScreenState::MENU2_WIFICONNECT);
+                    break;
+                } 
+                else if (ui->isTouch(tx, ty, SAVE_BUTTON_X, SAVE_BUTTON_Y, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT)) {
+                    Serial.println("User clicked OK to confirm Wi-Fi password: ");
+                    Serial.println(wifiPassword);
+                    ui->setScreenState(ScreenState::MENU2_WIFICONFIRM);
+                    break;
+                } 
+                // If a "clear" button exists, handle it here.
+                else if (ui->isTouch(tx, ty, CLEAR_BUTTON_X, CLEAR_BUTTON_Y, CLEAR_BUTTON_WIDTH, CLEAR_BUTTON_HEIGHT)) {
+                    wifiPassword[0] = '\0';
+                    ui->drawWiFiPassword();
+                    break;
+                } 
+                else {
+                    bool keyHandled = false;
+                    // Process regular alphanumeric keys.
+                    for (int row = 0; row < 4 && !keyHandled; row++) {
+                        for (int col = 0; col < 10; col++) {
+                            int keyX = col * keyWidth;
+                            int keyY = keyStartY + row * keyHeight;
+                            if (ui->isTouch(tx, ty, keyX, keyY, keyWidth, keyHeight)) {
+                                char keyChar = (isShifted && row > 0) ? toupper(keys[row][col]) : keys[row][col];
+                                size_t curLen = strlen(wifiPassword);
+                                if (curLen < MAX_WIFI_PASS_LEN) {
+                                    wifiPassword[curLen] = keyChar;
+                                    wifiPassword[curLen + 1] = '\0';
+                                }
+                                ui->drawWiFiPassword();
+                                keyHandled = true;
+                                break;
+                            }
+                        }
                     }
-                    ui->updateScreen();
-                    return;
+                    if (keyHandled) break;
+            
+                    // Handle special keys: SHIFT, SPACE, BACKSPACE.
+                    if (ui->isTouch(tx, ty, 0, keyStartY + 4 * keyHeight, 2 * keyWidth, keyHeight)) {
+                        isShifted = !isShifted;
+                        // Redraw keyboard and input area.
+                        ui->menu2WifiPasswordScreen(); 
+                        break;
+                    }
+                    if (ui->isTouch(tx, ty, 2 * keyWidth, keyStartY + 4 * keyHeight, 6 * keyWidth, keyHeight)) {
+                        size_t curLen = strlen(wifiPassword);
+                        if (curLen < MAX_WIFI_PASS_LEN) {
+                            wifiPassword[curLen] = ' ';
+                            wifiPassword[curLen + 1] = '\0';
+                        }
+                        ui->drawWiFiPassword();
+                        break;
+                    }
+                    if (ui->isTouch(tx, ty, 8 * keyWidth, keyStartY + 4 * keyHeight, 2 * keyWidth, keyHeight)) {
+                        size_t curLen = strlen(wifiPassword);
+                        if (curLen > 0) {
+                            wifiPassword[curLen - 1] = '\0';
+                        }
+                        ui->drawWiFiPassword();
+                        break;
                     }
                 }
-                }
-                if (ui->isTouch(tx, ty, 0, keyStartY + 4 * keyHeight, 2 * keyWidth, keyHeight)) {
-                isShifted = !isShifted;
-                ui->updateScreen();
-                return;
-                }
-                if (ui->isTouch(tx, ty, 2 * keyWidth, keyStartY + 4 * keyHeight, 6 * keyWidth, keyHeight)) {
-                size_t curLen = strlen(wifiPassword);
-                if (curLen < MAX_WIFI_PASS_LEN) {
-                    wifiPassword[curLen] = ' ';
-                    wifiPassword[curLen + 1] = '\0';
-                }
-                ui->updateScreen();
-                return;
-                }
-                if (ui->isTouch(tx, ty, 8 * keyWidth, keyStartY + 4 * keyHeight, 2 * keyWidth, keyHeight)) {
-                size_t curLen = strlen(wifiPassword);
-                if (curLen > 0) {
-                    wifiPassword[curLen - 1] = '\0';
-                }
-                ui->updateScreen();
-                return;
-                }
-            }
-            break;
+                break;
+            }            
             case ScreenState::MENU2_WIFICONFIRM:
             if (ui->isTouch(tx, ty, BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT)) {
                 ui->setScreenState(ScreenState::MENU2_WIFIPASS);
@@ -307,7 +355,7 @@ void Input::handleTouch() {
             default:
             break;
         }
-        ui->updateScreen(); // Refresh the screen after processing the touch.
+        // ui->updateScreen(); // Refresh the screen after processing the touch.
         }
         wasTouched = true;
     } else if (!currentlyTouched) {
@@ -324,103 +372,260 @@ void Input::handleRotary() {
     
     if (clkState != encoderLastState && clkState == LOW) {
             switch (cs) {
-              case ScreenState::MENU1:
-                if (dtState == clkState)
-                  currentMenuItem = (currentMenuItem + 1) % NUM_MENU_ITEMS;
-                else
-                  currentMenuItem = (currentMenuItem - 1 + NUM_MENU_ITEMS) % NUM_MENU_ITEMS;
-                ui->updateScreen();
-                break;
-              case ScreenState::NEW_SETLIST:
-                if (currentProject.songCount > 0) {
-                  int itemsPerPage = (tft.height() - 60) / 30 - 1;
-                  if (dtState == clkState)
-                    currentMenuItem = min(currentMenuItem + 1, currentProject.songCount - 1);
-                  else
-                    currentMenuItem = max(currentMenuItem - 1, 0);
-                  if (currentMenuItem < scrollOffset)
-                    scrollOffset = currentMenuItem;
-                  else if (currentMenuItem >= scrollOffset + itemsPerPage)
-                    scrollOffset = currentMenuItem - itemsPerPage + 1;
-                ui->updateScreen();
-                }
-                break;
-              case ScreenState::EDIT_SETLIST: {
-                int itemsPerPage = (tft.height() - 60) / 30 - 1;
-                if (isReordering) {
-                  if (dtState == clkState && reorderTarget < selectedProject.songCount - 1) {
-                    SongInfo temp = selectedProject.songs[reorderTarget];
-                    selectedProject.songs[reorderTarget] = selectedProject.songs[reorderTarget + 1];
-                    selectedProject.songs[reorderTarget + 1] = temp;
-                    reorderTarget++;
-                  } else if (dtState != clkState && reorderTarget > 0) {
-                    SongInfo temp = selectedProject.songs[reorderTarget];
-                    selectedProject.songs[reorderTarget] = selectedProject.songs[reorderTarget - 1];
-                    selectedProject.songs[reorderTarget - 1] = temp;
-                    reorderTarget--;
-                  }
-                  if (reorderTarget < scrollOffset)
-                    scrollOffset = reorderTarget;
-                  else if (reorderTarget >= scrollOffset + itemsPerPage)
-                    scrollOffset = reorderTarget - itemsPerPage + 1;
-                    ui->updateScreen();;
-                } else {
-                  if (selectedProject.songCount > 0) {
-                    if (dtState == clkState)
-                      currentMenuItem = (currentMenuItem + 1) % selectedProject.songCount;
-                    else
-                      currentMenuItem = (currentMenuItem - 1 + selectedProject.songCount) % selectedProject.songCount;
-                    if (currentMenuItem < scrollOffset)
-                      scrollOffset = currentMenuItem;
-                    else if (currentMenuItem >= scrollOffset + itemsPerPage)
-                      scrollOffset = currentMenuItem - itemsPerPage + 1;
-                  }
-                  ui->updateScreen();;
-                }
-              } break;
-              case ScreenState::SELECT_SETLIST:
-                if (dtState == clkState)
-                  currentMenuItem = (currentMenuItem + 1) % MAX_PRESETS;
-                else
-                  currentMenuItem = (currentMenuItem - 1 + MAX_PRESETS) % MAX_PRESETS;
-                  ui->updateScreen();;
-                break;
               case ScreenState::HOME:
-                if (dtState == clkState)
-                  currentMenuSelection = (currentMenuSelection == MENU1_SELECTED) ? MENU2_SELECTED : MENU1_SELECTED;
-                needsRedraw = true;
+              if (dtState == clkState)
+                ui->updateHomeMenuSelection(1);   // move selection forward
+              else
+                ui->updateHomeMenuSelection(-1);  // move selection backward
+              break;
                 break;
+              case ScreenState::MENU1:
+              {
+                int prevIndex = currentMenuItem;
+                // Update currentMenuItem based on encoder input:
+                if (dtState == clkState)
+                    currentMenuItem = (currentMenuItem + 1) % NUM_MENU_ITEMS;
+                else
+                    currentMenuItem = (currentMenuItem - 1 + NUM_MENU_ITEMS) % NUM_MENU_ITEMS;
+                
+                // Update only the two items that changed.
+                ui->updateMenuSelection(prevIndex, currentMenuItem);
+                currentMenuItem = 0;
+              }
+                break;
+                case ScreenState::NEW_SETLIST:
+                if (currentProject.songCount > 0) {
+                    int itemsPerPage = 5;  // Fixed visible count
+                    int previousItem = currentMenuItem;
+                    int previousScrollOffset = scrollOffset;
+                    
+                    // Update currentMenuItem with wrap-around.
+                    if (dtState == clkState) { // Clockwise rotation.
+                        if (currentMenuItem == currentProject.songCount - 1)
+                            currentMenuItem = 0;
+                        else
+                            currentMenuItem++;
+                    } else { // Counter-clockwise rotation.
+                        if (currentMenuItem == 0)
+                            currentMenuItem = currentProject.songCount - 1;
+                        else
+                            currentMenuItem--;
+                    }
+                    
+                    // Adjust scrollOffset to ensure the currentMenuItem is visible.
+                    if (currentMenuItem < scrollOffset)
+                        scrollOffset = currentMenuItem;
+                    else if (currentMenuItem >= scrollOffset + itemsPerPage)
+                        scrollOffset = currentMenuItem - itemsPerPage + 1;
+                    
+                    // If the scroll window has changed (or if we wrapped), redraw the entire list.
+                    if (scrollOffset != previousScrollOffset) {
+                        ui->drawSongList();
+                    } else {
+                        // Otherwise, update only the affected items.
+                        ui->drawSongListItem(previousItem, false);
+                        ui->drawSongListItem(currentMenuItem, true);
+                    }
+                    // currentMenuItem = 0;
+                }
+                break;              
+                case ScreenState::EDIT_SETLIST: {
+                  int itemsPerPage = 5;  // Fixed to show 5 items.
+                  
+                  if (isReordering) {
+                      int previousReorderTarget = reorderTarget;
+                      int previousScrollOffset = scrollOffset;
+                      int total = selectedProject.songCount;
+                      
+                      // Handle reordering with wrap-around.
+                      if (dtState == clkState) {  // Clockwise rotation.
+                          if (reorderTarget == total - 1) {
+                              // Wrap-around: swap the last song with the first.
+                              SongInfo temp = selectedProject.songs[total - 1];
+                              selectedProject.songs[total - 1] = selectedProject.songs[0];
+                              selectedProject.songs[0] = temp;
+                              reorderTarget = 0;
+                          } else {
+                              // Normal swap downward.
+                              SongInfo temp = selectedProject.songs[reorderTarget];
+                              selectedProject.songs[reorderTarget] = selectedProject.songs[reorderTarget + 1];
+                              selectedProject.songs[reorderTarget + 1] = temp;
+                              reorderTarget++;
+                          }
+                      } else {  // Counter-clockwise rotation.
+                          if (reorderTarget == 0) {
+                              // Wrap-around: swap the first song with the last.
+                              SongInfo temp = selectedProject.songs[0];
+                              selectedProject.songs[0] = selectedProject.songs[total - 1];
+                              selectedProject.songs[total - 1] = temp;
+                              reorderTarget = total - 1;
+                          } else {
+                              // Normal swap upward.
+                              SongInfo temp = selectedProject.songs[reorderTarget];
+                              selectedProject.songs[reorderTarget] = selectedProject.songs[reorderTarget - 1];
+                              selectedProject.songs[reorderTarget - 1] = temp;
+                              reorderTarget--;
+                          }
+                      }
+                      
+                      // Adjust scrollOffset with wrap-around.
+                      if (reorderTarget == 0) {
+                          scrollOffset = 0;
+                      } else if (reorderTarget == total - 1) {
+                          scrollOffset = max(total - itemsPerPage, 0);
+                      } else {
+                          if (reorderTarget < scrollOffset)
+                              scrollOffset = reorderTarget;
+                          else if (reorderTarget >= scrollOffset + itemsPerPage)
+                              scrollOffset = reorderTarget - itemsPerPage + 1;
+                      }
+                      
+                      // If the scroll window changed, redraw the entire list.
+                      if (scrollOffset != previousScrollOffset) {
+                          ui->drawEditedSongList();
+                      } else {
+                          // Otherwise, update the affected items.
+                          // Always draw the new reorderTarget as highlighted (green in reordering mode).
+                          ui->drawEditedSongListItem(reorderTarget, true);
+                          // Update the neighbor: if rotating clockwise, update the item before reorderTarget;
+                          // if counter-clockwise, update the item after.
+                          if (dtState == clkState) {
+                              int neighbor = (reorderTarget == 0) ? total - 1 : reorderTarget - 1;
+                              ui->drawEditedSongListItem(neighbor, false);
+                          } else {
+                              int neighbor = (reorderTarget == total - 1) ? 0 : reorderTarget + 1;
+                              ui->drawEditedSongListItem(neighbor, false);
+                          }
+                      }
+                  } else {
+                      // Non-reordering branch with wrap-around (as previously implemented).
+                      int previousItem = currentMenuItem;
+                      int previousScrollOffset = scrollOffset;
+                      int total = selectedProject.songCount;
+                      
+                      if (dtState == clkState) {  // Clockwise: move down.
+                          if (currentMenuItem == total - 1)
+                              currentMenuItem = 0;
+                          else
+                              currentMenuItem++;
+                      } else {  // Counter-clockwise: move up.
+                          if (currentMenuItem == 0)
+                              currentMenuItem = total - 1;
+                          else
+                              currentMenuItem--;
+                      }
+                      
+                      // Adjust scrollOffset.
+                      if (currentMenuItem == 0)
+                          scrollOffset = 0;
+                      else if (currentMenuItem == total - 1)
+                          scrollOffset = max(total - itemsPerPage, 0);
+                      else {
+                          if (currentMenuItem < scrollOffset)
+                              scrollOffset = currentMenuItem;
+                          else if (currentMenuItem >= scrollOffset + itemsPerPage)
+                              scrollOffset = currentMenuItem - itemsPerPage + 1;
+                      }
+                      
+                      if (scrollOffset != previousScrollOffset) {
+                          ui->drawEditedSongList();
+                      } else {
+                          ui->drawEditedSongListItem(previousItem, false);
+                          ui->drawEditedSongListItem(currentMenuItem, true);
+                      }
+                  }
+              } break;                     
+                // Rotary encoder event for preset selection
+              case ScreenState::SELECT_SETLIST: {
+                int itemsPerPage = 5;
+                int previousIndex = ui->currentPresetIndex;
+                int previousScrollOffset = ui->presetScrollOffset;
+                int total = MAX_PRESETS;
+
+                // Update currentPresetIndex with wrap-around
+                if (dtState == clkState) {  // Clockwise rotation
+                    if (ui->currentPresetIndex == total - 1)
+                      ui->currentPresetIndex = 0;
+                    else
+                    ui->currentPresetIndex++;
+                } else {  // Counter-clockwise rotation
+                    if (ui->currentPresetIndex == 0)
+                    ui->currentPresetIndex = total - 1;
+                    else
+                    ui->currentPresetIndex--;
+                }
+
+                // Adjust presetScrollOffset to keep currentPresetIndex visible.
+                if (ui->currentPresetIndex < ui->presetScrollOffset)
+                ui->presetScrollOffset = ui->currentPresetIndex;
+                else if (ui->currentPresetIndex >= ui->presetScrollOffset + itemsPerPage)
+                ui->presetScrollOffset = ui->currentPresetIndex - itemsPerPage + 1;
+
+                // Instead of calling selectSetlistScreen() which does a full-screen clear,
+                // only update the dynamic region:
+                if (ui->presetScrollOffset != previousScrollOffset) {
+                    // If scroll changed, redraw entire list area.
+                    ui->drawPresetList();
+                } else {
+                    // Otherwise, update only the affected items.
+                    ui->drawPresetListItem(previousIndex, false);
+                    ui->drawPresetListItem(ui->currentPresetIndex, true);
+                }
+              } break;          
               case ScreenState::MENU2:
+              {
+                int prevIndex = currentMenu2Item;
                 if (dtState == clkState)
                   currentMenu2Item = (currentMenu2Item + 1) % NUM_MENU2_ITEMS;
                 else
                   currentMenu2Item = (currentMenu2Item - 1 + NUM_MENU2_ITEMS) % NUM_MENU2_ITEMS;
-                  ui->updateScreen();;
+                  ui->updateMenu2Selection(prevIndex, currentMenu2Item);
+                currentMenuItem = 0;
+              }
                 break;
               case ScreenState::MENU2_WIFISETTINGS:
+              {
+                int prevIndex = currentWifiMenuItem;
                 if (dtState == clkState)
                   currentWifiMenuItem = (currentWifiMenuItem + 1) % NUM_WIFI_MENU_ITEMS;
                 else
                   currentWifiMenuItem = (currentWifiMenuItem - 1 + NUM_WIFI_MENU_ITEMS) % NUM_WIFI_MENU_ITEMS;
-                  ui->updateScreen();;
+                  ui->updateWifiMenuSelection(prevIndex,  currentWifiMenuItem);
+              }
                 break;
-              case ScreenState::MENU2_WIFICONNECT: {
-                const int itemsPerPage = 5;
-                if (dtState == clkState)
-                  wifiCurrentItem++;
-                else
-                  wifiCurrentItem--;
-                if (wifiCurrentItem >= wifiCount)
-                  wifiCurrentItem = 0;
-                else if (wifiCurrentItem < 0)
-                  wifiCurrentItem = wifiCount - 1;
-                if (wifiCurrentItem < wifiScrollOffset)
-                  wifiScrollOffset = wifiCurrentItem;
-                else if (wifiCurrentItem >= wifiScrollOffset + itemsPerPage)
-                  wifiScrollOffset = wifiCurrentItem - (itemsPerPage - 1);
-                wifiScrollOffset = constrain(wifiScrollOffset, 0, max(0, wifiCount - itemsPerPage));
-                ui->updateScreen();;
-              } break;
+                case ScreenState::MENU2_WIFICONNECT: {
+                    const int itemsPerPage = 5;
+                    int previousWifiItem = wifiCurrentItem;
+                    int previousScrollOffset = wifiScrollOffset;
+                
+                    // Update wifiCurrentItem based on rotary encoder state.
+                    if (dtState == clkState)
+                        wifiCurrentItem++;
+                    else
+                        wifiCurrentItem--;
+                
+                    // Wrap-around.
+                    if (wifiCurrentItem >= wifiCount)
+                        wifiCurrentItem = 0;
+                    else if (wifiCurrentItem < 0)
+                        wifiCurrentItem = wifiCount - 1;
+                
+                    // Adjust scroll offset to keep the current item visible.
+                    if (wifiCurrentItem < wifiScrollOffset)
+                        wifiScrollOffset = wifiCurrentItem;
+                    else if (wifiCurrentItem >= wifiScrollOffset + itemsPerPage)
+                        wifiScrollOffset = wifiCurrentItem - (itemsPerPage - 1);
+                    wifiScrollOffset = constrain(wifiScrollOffset, 0, max(0, wifiCount - itemsPerPage));
+                
+                    // Redraw only if scroll window changed; otherwise, update only the changed items.
+                    if (wifiScrollOffset != previousScrollOffset) {
+                        ui->drawWiFiList();
+                    } else {
+                        ui->drawWiFiListItem(previousWifiItem, false);
+                        ui->drawWiFiListItem(wifiCurrentItem, true);
+                    }
+                    break;
+                }                
               default:
                 break;
             }
@@ -432,27 +637,54 @@ void Input::handleRotary() {
     if (btnState == LOW && encoderButtonState == HIGH) {
         switch (cs) {
         case ScreenState::HOME:
-            // if (currentMenuSelection == MENU1_SELECTED)
-            //   setScreenState(ScreenState::MENU1);
-            // else
-            //   setScreenState(ScreenState::MENU2);
-            break;
-        case ScreenState::NEW_SETLIST:
-            if (currentProject.songCount > 0) {
-            selectedSongs[currentMenuItem] = !selectedSongs[currentMenuItem];
-            selectedTrackCount += selectedSongs[currentMenuItem] ? 1 : -1;
-            ui->updateScreen();
+          if (ui->getCurrentHomeMenuSelection() == 0) {
+              ui->setScreenState(ScreenState::MENU1);
+          } else {
+              ui->setScreenState(ScreenState::MENU2);
+          }
+          break;
+          case ScreenState::MENU1:
+            switch (ui->getCurrentMenuItem()) {
+                case 0:
+                    ui->setScreenState(ScreenState::NEW_SETLIST);
+                    break;
+                case 1:
+                    ui->setScreenState(ScreenState::SELECT_SETLIST);
+                    break;
+                case 2:
+                    ui->setScreenState(ScreenState::EDIT_SETLIST);
+                    break;
+                case 3:
+                    ui->setScreenState(ScreenState::HOME);
+                    break;
+                case 4:
+                    ui->setScreenState(ScreenState::HOME);
+                    break;
+                default:
+                    break;
             }
             break;
+          case ScreenState::NEW_SETLIST:
+            if (currentProject.songCount > 0) {
+                // Toggle the selection of the current song.
+                selectedSongs[currentMenuItem] = !selectedSongs[currentMenuItem];
+                selectedTrackCount += selectedSongs[currentMenuItem] ? 1 : -1;
+                ui->drawSongListItem(currentMenuItem, true);
+                
+                // Optionally, update the status text (e.g., "3 / 10")
+                ui->updateSelectedSongCount();
+            }
+            break;
+        
         case ScreenState::EDIT_SETLIST:
             if (isReordering) {
             isReordering = false;
             currentMenuItem = reorderTarget;
-            ui->updateScreen();
+            ui->drawEditedSongList();
             } else {
             reorderTarget = currentMenuItem;
             isReordering = true;
-            ui->updateScreen();
+            ui->drawEditedSongListItem(currentMenuItem, true);
             }
             break;
         case ScreenState::SELECT_SETLIST:
@@ -477,10 +709,13 @@ void Input::handleRotary() {
             wifiCount = 0;
             ui->setScreenState(ScreenState::MENU2_WIFICONNECT);
             } else if (currentWifiMenuItem == 1) {
+                ui->setScreenState(ScreenState::WIFI_PROPERTIES);
+            } else if (currentMenu2Item == 2) {
                 ui->setScreenState(ScreenState::MENU2);
             }
             break;
         case ScreenState::MENU2_WIFICONNECT:
+
             if (wifiCount > 0) {
             selectedSSID = wifiSSIDs[wifiCurrentItem];
             memset(wifiPassword, 0, sizeof(wifiPassword));
@@ -495,95 +730,100 @@ void Input::handleRotary() {
 }
 
 void Input::StartButton() {
-    static bool debouncedState = false;
-    static bool lastRawState = HIGH; // Assuming buttons are INPUT_PULLUP.
-    static unsigned long lastDebounceTime = 0;
-    const unsigned long debounceDelay = 20;
+  static bool debouncedState = false;
+  static bool lastRawState = HIGH; // Assuming buttons are INPUT_PULLUP.
+  static unsigned long lastDebounceTime = 0;
+  const unsigned long debounceDelay = 20;
 
-    bool currentRawState = (digitalRead(BTN_START) == LOW);
-    if (currentRawState != lastRawState) {
-        lastDebounceTime = millis();
-        lastRawState = currentRawState;
-    }
-    if ((millis() - lastDebounceTime) > debounceDelay) {
-        if (currentRawState != debouncedState) {
-            debouncedState = currentRawState;
-            if (debouncedState) {
-                isPlaying = true;
-                Midi::Play(loadedPreset.data.songs[currentTrack].songIndex);
-                needsRedraw = true;
-            }
-        }
-    }
+  bool currentRawState = (digitalRead(BTN_START) == LOW);
+  if (currentRawState != lastRawState) {
+      lastDebounceTime = millis();
+      lastRawState = currentRawState;
+  }
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+      if (currentRawState != debouncedState) {
+          debouncedState = currentRawState;
+          if (debouncedState) { // Button pressed
+              isPlaying = true;
+              Midi::Play(loadedPreset.data.songs[currentTrack].songIndex);
+              // Update only the track display region so that the text turns green.
+              ui->drawLoadedPreset();
+          }
+      }
+  }
 }
 
 void Input::StopButton() {
-    static bool debouncedState = false;
-    static bool lastRawState = false;
-    static unsigned long lastDebounceTime = 0;
-    const unsigned long debounceDelay = 20;
+  static bool debouncedState = false;
+  static bool lastRawState = HIGH; // Assuming buttons are INPUT_PULLUP.
+  static unsigned long lastDebounceTime = 0;
+  const unsigned long debounceDelay = 20;
 
-    bool currentRawState = (digitalRead(BTN_STOP) == LOW);
-    if (currentRawState != lastRawState) {
-        lastDebounceTime = millis();
-        lastRawState = currentRawState;
-    }
-    if ((millis() - lastDebounceTime) > debounceDelay) {
-        if (currentRawState != debouncedState) {
-            debouncedState = currentRawState;
-            if (debouncedState) {
-                Midi::Stop();
-                isPlaying = false;
-                needsRedraw = true;
-            }
-        }
-    }
+  bool currentRawState = (digitalRead(BTN_STOP) == LOW);
+  if (currentRawState != lastRawState) {
+      lastDebounceTime = millis();
+      lastRawState = currentRawState;
+  }
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+      if (currentRawState != debouncedState) {
+          debouncedState = currentRawState;
+          if (debouncedState) { // Button pressed.
+              Midi::Stop();
+              isPlaying = false;
+              // Update only the track display region so that the text returns to normal color.
+              ui->drawLoadedPreset();
+          }
+      }
+  }
 }
 
 void Input::LeftButton() {
-    static bool lastLeftState = HIGH;
-    static unsigned long lastPressTime = 0;
-    const unsigned long debounceDelay = 200; // milliseconds
+  static bool lastLeftState = HIGH;
+  static unsigned long lastPressTime = 0;
+  const unsigned long debounceDelay = 200; // milliseconds
 
-    bool btnLeftState = digitalRead(BTN_LEFT);
-    
-    // Check for a transition from not-pressed (HIGH) to pressed (LOW)
-    if (lastLeftState == HIGH && btnLeftState == LOW) {
-        if (millis() - lastPressTime > debounceDelay) {
-            // Trigger the event only once per press.
-            if (selectedPresetSlot != -1 && totalTracks > 0) {
-                currentTrack = (currentTrack - 1 + totalTracks) % totalTracks;
-                Serial.println(F("Moved to previous track"));
-            } else {
-                Serial.println(F("No tracks available to navigate (left)."));
-            }
-            lastPressTime = millis();
-        }
-    }
-    lastLeftState = btnLeftState;
+  bool btnLeftState = digitalRead(BTN_LEFT);
+  
+  // Check for transition from not-pressed to pressed.
+  if (lastLeftState == HIGH && btnLeftState == LOW) {
+      if (millis() - lastPressTime > debounceDelay) {
+          // Trigger event only once per press.
+          if (selectedPresetSlot != -1 && totalTracks > 0) {
+              currentTrack = (currentTrack - 1 + totalTracks) % totalTracks;
+              Serial.println(F("Moved to previous track"));
+              presetChanged = true;  // Mark that the track has changed.
+              // Update the homepage preset display partially.
+              ui->drawLoadedPreset();
+          } else {
+              Serial.println(F("No tracks available to navigate (left)."));
+          }
+          lastPressTime = millis();
+      }
+  }
+  lastLeftState = btnLeftState;
 }
 
 void Input::RightButton() {
-    static bool lastRightState = HIGH;
-    static unsigned long lastPressTime = 0;
-    const unsigned long debounceDelay = 200; // milliseconds
+  static bool lastRightState = HIGH;
+  static unsigned long lastPressTime = 0;
+  const unsigned long debounceDelay = 200; // milliseconds
 
-    bool btnRightState = digitalRead(BTN_RIGHT);
-    
-    // Check for a transition from HIGH to LOW.
-    if (lastRightState == HIGH && btnRightState == LOW) {
-        if (millis() - lastPressTime > debounceDelay) {
-            // Trigger the event only once per press.
-            if (selectedPresetSlot != -1 && totalTracks > 0) {
-                currentTrack = (currentTrack + 1) % totalTracks;
-                Serial.println(F("Moved to next track"));
-            } else {
-                Serial.println(F("No tracks available to navigate (right)."));
-            }
-            lastPressTime = millis();
-        }
-    }
-    lastRightState = btnRightState;
+  bool btnRightState = digitalRead(BTN_RIGHT);
+  
+  if (lastRightState == HIGH && btnRightState == LOW) {
+      if (millis() - lastPressTime > debounceDelay) {
+          if (selectedPresetSlot != -1 && totalTracks > 0) {
+              currentTrack = (currentTrack + 1) % totalTracks;
+              Serial.println(F("Moved to next track"));
+              presetChanged = true;  // Mark that the track has changed.
+              ui->drawLoadedPreset();
+          } else {
+              Serial.println(F("No tracks available to navigate (right)."));
+          }
+          lastPressTime = millis();
+      }
+  }
+  lastRightState = btnRightState;
 }
 
 void Input::handleVolume() {

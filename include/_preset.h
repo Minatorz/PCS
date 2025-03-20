@@ -15,6 +15,8 @@ public:
   // Load a preset from the device storage.
   static Preset loadPresetFromDevice(int presetNumber);
 
+  static void deletePresetFromDevice(int presetNumber);
+
   static void initPreferences();
 };
 

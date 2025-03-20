@@ -53,6 +53,14 @@
 #define MENU_ITEM_Y 50
 #define MENU_ITEM_WIDTH 200
 
+#define CLEAR_BUTTON_WIDTH  30
+#define CLEAR_BUTTON_HEIGHT 30
+// Position the clear button at the far right of the input area.
+// Suppose your input text box starts at x = 10 and has width = (tft.width() - 20).
+// We then place the button at the right edge of that box.
+#define CLEAR_BUTTON_X      (tft.width() - 10 - CLEAR_BUTTON_WIDTH)
+#define CLEAR_BUTTON_Y      50  // same y as input text area
+
 #define LED_PING 4 
 #define LED_WIFI 5
 
@@ -105,6 +113,8 @@ extern int currentWifiMenuItem;   // Highlight index for Wi-Fi sub-menu
 // Menu selection enumeration
 enum MenuSelection { MENU1_SELECTED, MENU2_SELECTED };
 extern MenuSelection currentMenuSelection;
+
+extern int menu1Index;
 
 extern byte currentVolume;      // Current volume level
 extern bool isPlaying;

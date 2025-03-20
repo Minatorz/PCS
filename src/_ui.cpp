@@ -163,43 +163,439 @@ void UI::drawKeyboard(bool shifted) {
 }
 
 void UI::displayVolume() {
-    static bool firstCall = true;
-    static byte lastVolume = 0;
-    int barX = 100;
-    int barY = 45;
+    // Define overall dimensions of the volume bar (same as used in homeScreen).
+    int barX = 50;
+    int barY = 10;
     int barWidth = 80;
     int barHeight = 25;
+    
+    // Define the interior (offset by 1 pixel on all sides to avoid redrawing the border).
+    int interiorX = barX + 1;
+    int interiorY = barY + 1;
+    int interiorWidth = barWidth - 2;
+    int interiorHeight = barHeight - 2;
+    
+    // Map the current and previous volume values to interior width.
+    static byte lastVolume = currentVolume;  // Initialize with currentVolume.
+    int filledWidth = map(currentVolume, 0, 127, 0, interiorWidth);
+    int lastFilledWidth = map(lastVolume, 0, 127, 0, interiorWidth);
 
-    // On the very first call, perform a full draw.
-    if (firstCall) {
-        lastVolume = currentVolume;
-        firstCall = false;
-        int filledWidth = map(currentVolume, 0, 127, 0, barWidth);
-        // Draw the filled portion.
-        tft.fillRect(barX, barY, filledWidth, barHeight, ILI9341_GREEN);
-        // Clear the remaining area.
-        tft.fillRect(barX + filledWidth, barY, barWidth - filledWidth, barHeight, ILI9341_BLACK);
-        // Draw the border.
-        tft.drawRect(barX, barY, barWidth, barHeight, ILI9341_WHITE);
-        return;
-    }
-
-    // Calculate the filled widths for current and previous volumes.
-    int filledWidth = map(currentVolume, 0, 127, 0, barWidth);
-    int lastFilledWidth = map(lastVolume, 0, 127, 0, barWidth);
-
+    // Update only the interior based on volume changes.
     if (filledWidth > lastFilledWidth) {
-        // Volume increased: fill only the extra portion.
-        tft.fillRect(barX + lastFilledWidth, barY, filledWidth - lastFilledWidth, barHeight, ILI9341_GREEN);
+        // Volume increased: fill the extra portion in green.
+        tft.fillRect(interiorX + lastFilledWidth, interiorY, filledWidth - lastFilledWidth, interiorHeight, ILI9341_GREEN);
     } else if (filledWidth < lastFilledWidth) {
-        // Volume decreased: clear only the removed portion.
-        tft.fillRect(barX + filledWidth, barY, lastFilledWidth - filledWidth, barHeight, ILI9341_BLACK);
+        // Volume decreased: clear the portion that is no longer filled.
+        tft.fillRect(interiorX + filledWidth, interiorY, lastFilledWidth - filledWidth, interiorHeight, ILI9341_BLACK);
+    } else {
+        // On the first call or if no change, ensure the interior is drawn correctly.
+        tft.fillRect(interiorX, interiorY, filledWidth, interiorHeight, ILI9341_GREEN);
+        if (filledWidth < interiorWidth) {
+            tft.fillRect(interiorX + filledWidth, interiorY, interiorWidth - filledWidth, interiorHeight, ILI9341_BLACK);
+        }
     }
     
-    // Always redraw the border.
-    tft.drawRect(barX, barY, barWidth, barHeight, ILI9341_WHITE);
-  
+    // Update lastVolume for future comparisons.
     lastVolume = currentVolume;
+}
+
+void UI::drawHomeMenuBox() {
+    // Draw Box 1
+    if (currentHomeMenuSelection == 0) {
+        tft.drawRect(BOX1_X, BOX1_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_YELLOW);
+        drawTextCenter("1", BOX1_X, BOX1_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_YELLOW);
+    } else {
+        tft.drawRect(BOX1_X, BOX1_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_WHITE);
+        drawTextCenter("1", BOX1_X, BOX1_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_WHITE);
+    }
+
+    // Draw Box 2
+    if (currentHomeMenuSelection == 1) {
+        tft.drawRect(BOX2_X, BOX2_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_YELLOW);
+        drawTextCenter("2", BOX2_X, BOX2_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_YELLOW);
+    } else {
+        tft.drawRect(BOX2_X, BOX2_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_WHITE);
+        drawTextCenter("2", BOX2_X, BOX2_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_WHITE);
+    }
+}
+
+void UI::updateHomeMenuSelection(int delta) {
+    int previousSelection = currentHomeMenuSelection;
+    // Update selection with wrapping (assuming two boxes)
+    currentHomeMenuSelection += delta;
+    if (currentHomeMenuSelection < 0)
+        currentHomeMenuSelection = 1;
+    else if (currentHomeMenuSelection > 1)
+        currentHomeMenuSelection = 0;
+
+    if (previousSelection != currentHomeMenuSelection) {
+        // Redraw the box that lost selection.
+        if (previousSelection == 0) {
+            // Clear and redraw Box 1 un-highlighted.
+            tft.fillRect(BOX1_X - 1, BOX1_Y - 1, BOX_WIDTH + 2, BOX_HEIGHT + 2, ILI9341_BLACK);
+            tft.drawRect(BOX1_X, BOX1_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_WHITE);
+            drawTextCenter("1", BOX1_X, BOX1_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_WHITE);
+        } else if (previousSelection == 1) {
+            // Clear and redraw Box 2 un-highlighted.
+            tft.fillRect(BOX2_X - 1, BOX2_Y - 1, BOX_WIDTH + 2, BOX_HEIGHT + 2, ILI9341_BLACK);
+            tft.drawRect(BOX2_X, BOX2_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_WHITE);
+            drawTextCenter("2", BOX2_X, BOX2_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_WHITE);
+        }
+
+        // Redraw the box that gained selection.
+        if (currentHomeMenuSelection == 0) {
+            tft.fillRect(BOX1_X - 1, BOX1_Y - 1, BOX_WIDTH + 2, BOX_HEIGHT + 2, ILI9341_BLACK);
+            tft.drawRect(BOX1_X, BOX1_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_YELLOW);
+            drawTextCenter("1", BOX1_X, BOX1_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_YELLOW);
+        } else if (currentHomeMenuSelection == 1) {
+            tft.fillRect(BOX2_X - 1, BOX2_Y - 1, BOX_WIDTH + 2, BOX_HEIGHT + 2, ILI9341_BLACK);
+            tft.drawRect(BOX2_X, BOX2_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_YELLOW);
+            drawTextCenter("2", BOX2_X, BOX2_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_YELLOW);
+        }
+    }
+}
+
+void UI::drawMenuItem(int index, bool selected) {
+    // Calculate the y-coordinate for this menu item.
+    int y = 60 + index * 30;
+    
+    // Clear the menu item region (we assume a width of 220 and height of 30).
+    tft.fillRect(10, y, 220, 30, ILI9341_BLACK);
+    
+    // Set the cursor position (adjust as needed).
+    tft.setCursor(15, y + 5);
+    
+    // If using an external font, set it here:
+    // tft.setFont(&FreeSans9pt7b);
+    
+    // Set the text color based on selection.
+    tft.setTextColor(selected ? ILI9341_YELLOW : ILI9341_WHITE);
+    
+    // Set text size.
+    tft.setTextSize(2);
+    
+    // Copy the menu item text (assuming menuItems is stored in PROGMEM).
+    char buffer[16];
+    strncpy_P(buffer, menuItems[index], sizeof(buffer));
+    buffer[sizeof(buffer) - 1] = '\0'; // ensure null-termination
+    tft.print(buffer);
+}
+
+void UI::updateMenuSelection(int previousIndex, int currentIndex) {
+    // Redraw the previous menu item without highlighting.
+    drawMenuItem(previousIndex, false);
+    
+    // Redraw the new menu item with highlighting.
+    drawMenuItem(currentIndex, true);
+}
+
+void UI::drawMenu2Item(int index, bool selected) {
+    // Calculate the y-coordinate for this menu item.
+    int y = 60 + index * 30;
+    
+    // Clear the menu item region (we assume a width of 220 and height of 30).
+    tft.fillRect(10, y, 220, 30, ILI9341_BLACK);
+    
+    // Set the cursor position (adjust as needed).
+    tft.setCursor(15, y + 5);
+    
+    // If using an external font, set it here:
+    // tft.setFont(&FreeSans9pt7b);
+    
+    // Set the text color based on selection.
+    tft.setTextColor(selected ? ILI9341_YELLOW : ILI9341_WHITE);
+    
+    // Set text size.
+    tft.setTextSize(2);
+    
+    // Copy the menu item text (assuming menuItems is stored in PROGMEM).
+    char buffer[16];
+    strncpy_P(buffer, menu2Items[index], sizeof(buffer));
+    buffer[sizeof(buffer) - 1] = '\0'; // ensure null-termination
+    tft.print(buffer);
+}
+
+void UI::updateMenu2Selection(int previousIndex, int currentIndex) {
+    // Redraw the previous menu item without highlighting.
+    drawMenu2Item(previousIndex, false);
+    
+    // Redraw the new menu item with highlighting.
+    drawMenu2Item(currentIndex, true);
+}
+
+void UI::drawWifiMenuItem(int index, bool selected) {
+    // Calculate the y-coordinate for this menu item.
+    int y = 60 + index * 30;
+    
+    // Clear the menu item region (we assume a width of 220 and height of 30).
+    tft.fillRect(10, y, 220, 30, ILI9341_BLACK);
+    
+    // Set the cursor position (adjust as needed).
+    tft.setCursor(15, y + 5);
+    
+    // If using an external font, set it here:
+    // tft.setFont(&FreeSans9pt7b);
+    
+    // Set the text color based on selection.
+    tft.setTextColor(selected ? ILI9341_YELLOW : ILI9341_WHITE);
+    
+    // Set text size.
+    tft.setTextSize(2);
+    
+    // Copy the menu item text (assuming menuItems is stored in PROGMEM).
+    char buffer[16];
+    strncpy_P(buffer, wifiMenuItems[index], sizeof(buffer));
+    buffer[sizeof(buffer) - 1] = '\0'; // ensure null-termination
+    tft.print(buffer);
+}
+
+void UI::updateWifiMenuSelection(int previousIndex, int currentIndex) {
+    // Redraw the previous menu item without highlighting.
+    drawWifiMenuItem(previousIndex, false);
+    
+    // Redraw the new menu item with highlighting.
+    drawWifiMenuItem(currentIndex, true);
+}
+
+void UI::drawSongList() {
+    int listX = 10;
+    int listY = 60;
+    int listWidth = tft.width() - 20;
+    int itemsPerPage = 5;
+    int listHeight = itemsPerPage * 30; // 5 items, 30 px each
+
+    // Clear the list area.
+    tft.fillRect(listX, listY, listWidth, listHeight, ILI9341_BLACK);
+
+    // Draw each visible song.
+    for (int i = 0; i < itemsPerPage && (i + scrollOffset) < currentProject.songCount; i++) {
+        int absoluteIndex = i + scrollOffset;
+        drawSongListItem(absoluteIndex, (absoluteIndex == currentMenuItem));
+    }
+
+    // Optionally, update status text (like "x / total")
+    // Optionally, update status text showing (selected songs)/(total songs found)
+    char buff[32];
+    snprintf(buff, sizeof(buff), "%d / %d", selectedTrackCount, currentProject.songCount);
+    drawTextTopCenter(buff, listY - 25, false, ILI9341_WHITE);
+}
+
+void UI::drawSongListItem(int absoluteIndex, bool highlighted) {
+    // Calculate the relative position within the visible list.
+    int relativeIndex = absoluteIndex - scrollOffset;
+    int y = 60 + relativeIndex * 30;
+    
+    // Clear the region for this song item.
+    tft.fillRect(10, y, 220, 30, ILI9341_BLACK);
+    
+    // Set the cursor and text size.
+    tft.setCursor(10, y + 5);
+    tft.setTextSize(2);
+    
+    // Determine the text color based on selection state.
+    // If the song is toggled selected (via button press), color it green.
+    // Otherwise, if it's currently highlighted by the rotary encoder, color it yellow.
+    // If neither, use white.
+    uint16_t textColor;
+    if (selectedSongs[absoluteIndex]) {
+        textColor = highlighted ? ILI9341_CYAN : ILI9341_GREEN;
+    } else {
+        textColor = highlighted ? ILI9341_YELLOW : ILI9341_WHITE;
+    }
+    
+    tft.setTextColor(textColor, ILI9341_BLACK);
+    
+    // Print the song number and name.
+    tft.print(absoluteIndex + 1);
+    tft.print(". ");
+    tft.print(currentProject.songs[absoluteIndex].songName);
+}
+
+void UI::updateSelectedSongCount() {
+    // Assume listY is the y-position where the song list starts.
+    int listY = 60;
+    int statusHeight = 20;  // Height of the status text area.
+
+    // Clear only the region where the status text is drawn.
+    tft.fillRect(120, listY -27, 30, statusHeight, ILI9341_BLACK);
+
+    // Update the status text with the number of selected songs.
+    char buff[32];
+    snprintf(buff, sizeof(buff), "%d / %d", selectedTrackCount, currentProject.songCount);
+    drawTextTopCenter(buff, listY - 25, false, ILI9341_WHITE);
+}
+
+void UI::drawEditedSongList() {
+    int listX = 10;
+    int listY = 60;
+    int itemsPerPage = 5;  // Always show 5 items if available.
+    int listWidth = tft.width() - 20;
+    int listHeight = itemsPerPage * 30; // 30 pixels per item.
+
+    // Clear the entire list area.
+    tft.fillRect(listX, listY, listWidth, listHeight, ILI9341_BLACK);
+
+    // Redraw each visible song item.
+    for (int i = 0; i < itemsPerPage && (i + scrollOffset) < selectedProject.songCount; i++) {
+        int absoluteIndex = i + scrollOffset;
+        // When reordering is active, use reorderTarget for highlighting;
+        // otherwise, use currentMenuItem.
+        bool highlighted = isReordering ? (absoluteIndex == reorderTarget)
+                                        : (absoluteIndex == currentMenuItem);
+        drawEditedSongListItem(absoluteIndex, highlighted);
+    }
+}
+
+void UI::drawEditedSongListItem(int absoluteIndex, bool highlighted) {
+    // Calculate the vertical position based on the current scroll offset.
+    int relativeIndex = absoluteIndex - scrollOffset;
+    int y = 60 + relativeIndex * 30;
+    
+    // Clear the area for this song item.
+    tft.fillRect(10, y, 270, 30, ILI9341_BLACK);
+    
+    // Set the cursor and text size.
+    tft.setCursor(10, y + 5);
+    tft.setTextSize(2);
+    
+    // When reordering mode is active and the item is highlighted, use green.
+    // Otherwise, highlighted items are yellow; non-highlighted items are white.
+    uint16_t textColor;
+    if (isReordering && highlighted) {
+        textColor = ILI9341_GREEN;
+    } else {
+        textColor = highlighted ? ILI9341_YELLOW : ILI9341_WHITE;
+    }
+    
+    tft.setTextColor(textColor, ILI9341_BLACK);
+    
+    // Print the song number and name.
+    tft.print(absoluteIndex + 1);
+    tft.print(". ");
+    tft.print(selectedProject.songs[absoluteIndex].songName);
+}
+
+void UI::drawPresetList() {
+    int itemsPerPage = 5;      // Fixed to show 5 presets
+    int listX = 10;
+    int listY = 60;
+    
+    preferences.begin("Setlists", true);
+    for (int i = 0; i < itemsPerPage; i++) {
+        int absoluteIndex = i + presetScrollOffset;
+        if (absoluteIndex >= MAX_PRESETS)
+            break;
+        int y = listY + i * 30;
+        tft.fillRect(listX, y, tft.width() - 20, 30, ILI9341_BLACK); // Clear the region
+
+        tft.setCursor(listX, y + 5);
+        tft.setTextSize(2);
+        uint16_t color = (absoluteIndex == currentPresetIndex) ? ILI9341_YELLOW : ILI9341_WHITE;
+        tft.setTextColor(color, ILI9341_BLACK);
+
+        String presetName = preferences.getString(("p" + String(absoluteIndex + 1) + "_name").c_str(), "No Data");
+        tft.print(absoluteIndex + 1);
+        tft.print(". ");
+        tft.print(presetName);
+    }
+    preferences.end();
+}
+
+void UI::drawPresetListItem(int index, bool highlighted) {
+    int itemsPerPage = 5;
+    int listY = 60;
+    int relativeIndex = index - presetScrollOffset;
+    int y = listY + relativeIndex * 30;
+
+    tft.fillRect(10, y, tft.width() - 20, 30, ILI9341_BLACK);
+    tft.setCursor(10, y + 5);
+    tft.setTextSize(2);
+    uint16_t color = highlighted ? ILI9341_YELLOW : ILI9341_WHITE;
+    tft.setTextColor(color, ILI9341_BLACK);
+    preferences.begin("Setlists", true);
+    String presetName = preferences.getString(("p" + String(index + 1) + "_name").c_str(), "No Data");
+    preferences.end();
+    tft.print(index + 1);
+    tft.print(". ");
+    tft.print(presetName);
+}
+
+void UI::drawSetlistName() {
+    // Define the input box dimensions.
+    int x = 10;
+    int y = 50;
+    int w = tft.width() - 20;
+    int h = 30;
+    int btnWidth = 30;  // Width of the clear "X" button.
+    
+    // Define the text area to be all of the input box except the clear button area.
+    int textAreaWidth = w - btnWidth;  // only clear text area
+    
+    // Clear only the text area.
+    tft.fillRect(x, y, textAreaWidth, h, ILI9341_BLACK);
+    
+    // Draw the input box border around the entire area.
+    tft.drawRect(x, y, w, h, ILI9341_WHITE);
+    
+    // Update the text in the text area.
+    tft.setCursor(x + 5, y + 5);
+    tft.setTextSize(2);
+    tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK);
+    tft.print(setlistName);
+    
+    // Now, draw the clear button if it hasn't already been drawn.
+    // Instead of redrawing it every time, you might want to draw it once
+    // and then only redraw if the button area is not being cleared.
+    int btnX = x + textAreaWidth;  // Position at the right edge of the text area.
+    int btnY = y;  // align vertically with input box.
+    
+    // Option 1: Always draw the clear button (if the fillRect above doesn't affect it).
+    // Option 2: Redraw the clear button only if necessary.
+    // In this example, we assume the text area is cleared only up to btnX,
+    // so the button area remains intact.
+    tft.fillRect(btnX, btnY, btnWidth, h, ILI9341_RED);
+    tft.drawRect(btnX, btnY, btnWidth, h, ILI9341_WHITE);
+    tft.setCursor(btnX + 8, btnY + 5);  // adjust these offsets as needed.
+    tft.setTextSize(2);
+    tft.setTextColor(ILI9341_WHITE, ILI9341_RED);
+    tft.print("X");
+}
+
+void UI::drawLoadedPreset() {
+    int textY = 100;
+    tft.fillRect(10, textY, tft.width()-20, 45, ILI9341_BLACK);
+    tft.drawRect(10, textY, tft.width()-20, 45, ILI9341_WHITE);
+    tft.fillRect(150, 13, 60, 20, ILI9341_BLACK);
+    
+    if (strcmp(loadedPreset.name, "No Preset") == 0 ||
+        strlen(loadedPreset.data.projectName) == 0 ||
+        totalTracks == 0) {
+        drawText("No tracks available.", 10, textY+10, ILI9341_RED, 2);
+    } else {
+        // Draw the preset name.
+        drawText(String(loadedPreset.name).c_str(), 95, 80, ILI9341_YELLOW, 2);
+        
+        // Draw the project name just below the preset name.
+        drawText(String(loadedPreset.data.projectName).c_str(), 105, 150, ILI9341_ORANGE, 2);
+        
+        // When a track is changed, force white text even if isPlaying is true.
+        uint16_t songColor;
+        if (presetChanged) {
+            songColor = ILI9341_WHITE;
+        } else {
+            songColor = isPlaying ? ILI9341_GREEN : ILI9341_WHITE;
+        }
+        
+        // Draw the song name centered in the preset area.
+        drawText(String(loadedPreset.data.songs[currentTrack].songName).c_str(),
+                 15, textY+10, songColor, 3);
+        // Draw the track counter.
+        drawText((String(currentTrack + 1) + "/" + String(totalTracks)).c_str(),
+                 150, 16, ILI9341_WHITE, 2);
+    }
+    
+    // Reset the flag after drawing.
+    presetChanged = false;
 }
 
 void UI::drawWiFiList() {
@@ -221,18 +617,48 @@ void UI::drawWiFiList() {
       int bars = map(rssiVal, -90, -30, 0, 5);
       bars = constrain(bars, 0, 5);
       int barWidth = 5, barHeight = 10, barSpacing = 3;
-      int barBaseX = tft.width() - 60, barBaseY = y;
+      int barBaseX = tft.width() - 60, barBaseY = y + 2;
       for (int b = 0; b < 5; b++) {
-        int bx = barBaseX + b * (barWidth + barSpacing);
+        int bx = barBaseX + b * (barWidth + barSpacing) + 5;
         if (b < bars)
           tft.fillRect(bx, barBaseY, barWidth, barHeight, ILI9341_GREEN);
         else
           tft.drawRect(bx, barBaseY, barWidth, barHeight, ILI9341_WHITE);
       }
     }
-  }
+}
 
-  void UI::checkWifiConnection() {
+void UI::drawWiFiListItem(int absoluteIndex, bool highlighted) {
+    // Calculate the relative position in the visible list.
+    int relativeIndex = absoluteIndex - wifiScrollOffset;
+    int y = 60 + relativeIndex * 30;
+    
+    // Clear the region for this Wi-Fi item.
+    tft.fillRect(10, y, tft.width() - 70, 30, ILI9341_BLACK);
+    
+    // Set text color based on selection state.
+    uint16_t textColor = highlighted ? ILI9341_YELLOW : ILI9341_WHITE;
+    tft.setTextColor(textColor, ILI9341_BLACK);
+    tft.setTextSize(2);
+    tft.setCursor(10, y);
+    tft.print(String(absoluteIndex + 1) + ". " + wifiSSIDs[absoluteIndex]);
+    
+    // Draw signal strength bars.
+    int rssiVal = wifiRSSI[absoluteIndex];
+    int bars = map(rssiVal, -90, -30, 0, 5);
+      bars = constrain(bars, 0, 5);
+      int barWidth = 5, barHeight = 10, barSpacing = 3;
+      int barBaseX = tft.width() - 60, barBaseY = y + 2;
+      for (int b = 0; b < 5; b++) {
+        int bx = barBaseX + b * (barWidth + barSpacing) + 5;
+        if (b < bars)
+          tft.fillRect(bx, barBaseY, barWidth, barHeight, ILI9341_GREEN);
+        else
+          tft.drawRect(bx, barBaseY, barWidth, barHeight, ILI9341_WHITE);
+      }
+}
+
+void UI::checkWifiConnection() {
     if (currentState == ScreenState::MENU2_WIFICONNECTING) {
         if (WiFi.status() == WL_CONNECTED && !wifiFullyConnected) {
             wifiFullyConnected = true;
@@ -255,6 +681,62 @@ void UI::drawWiFiList() {
     }
 }
 
+void UI::WifiScan() {
+    // Start a new Wi-Fi scan if one hasn't been started yet
+    if (!wifiScanInProgress && !wifiScanDone) {
+        Serial.println(F("Starting Async Wi-Fi Scan..."));
+        WiFi.mode(WIFI_STA);      // Set Wi-Fi mode to Station (STA)
+        WiFi.disconnect(true);    // Disconnect from any previous Wi-Fi connection
+        delay(100);               // Wait briefly before scanning
+        WiFi.scanNetworks(true);  // Start scanning asynchronously
+        wifiScanInProgress = true;
+    }
+
+    // Poll for scan results while in progress
+    if (wifiScanInProgress) {
+        int n = WiFi.scanComplete();  // Check if scan is completed
+        Serial.println(n);  // Debug print to check scan result
+        tft.fillRect(10, 60, tft.width() - 20, 160, ILI9341_BLACK);  // Clear previous content
+        drawText("Scanning...", 10, 60, ILI9341_YELLOW, 2);  // Show scanning message
+
+        // Keep scanning until we get a positive result (scan complete)
+        while (n <= 0) {
+            delay(100);  // Wait a bit before checking again
+            n = WiFi.scanComplete();  // Check scan result again
+        }
+        Serial.println(n);  // Debug print to check scan result
+
+        // If scan result is positive, proceed
+        if (n > 0) {
+            wifiCount = (n < MAX_WIFI_NETWORKS) ? n : MAX_WIFI_NETWORKS;
+            for (int i = 0; i < wifiCount; i++) {
+                wifiSSIDs[i] = WiFi.SSID(i);   // Store SSID
+                wifiRSSI[i] = WiFi.RSSI(i);    // Store RSSI (signal strength)
+            }
+            wifiScanDone = true;            // Mark scan as complete
+            wifiScanInProgress = false;     // Reset scan flag
+            Serial.println(F("Wi-Fi scan completed"));
+        }
+    }
+
+    if (wifiScanDone) {
+        tft.fillRect(10, 60, tft.width() - 20, 160, ILI9341_BLACK);  // Clear previous content
+        drawWiFiList();  // Draw the Wi-Fi list
+    }
+    wifiScanDone = false;
+}
+
+void UI::drawWiFiPassword() {
+    // Clear only the text area inside the input box.
+    // (Assuming the input box was drawn at x=10, y=50, with width = tft.width()-20 and height = 30.)
+    tft.fillRect(11, 51, tft.width()-22, 28, ILI9341_BLACK);
+    tft.setCursor(15, 57);
+    tft.setTextSize(2);
+    tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK);
+    tft.print(wifiPassword);
+}
+
+
 // --- INTERFACE ---
 
 void UI::loadingScreen() {
@@ -271,34 +753,36 @@ void UI::loadingScreen() {
 void UI::homeScreen() {
     Serial.println("HomePage");
     tft.fillScreen(ILI9341_BLACK);
-    drawText("Home Page", 10, 20, ILI9341_WHITE, 2);
-    tft.drawRect(BOX1_X, BOX1_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_WHITE);
-    drawTextCenter("1", BOX1_X, BOX1_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_WHITE);
-    tft.drawRect(BOX2_X, BOX2_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_WHITE);
-    drawTextCenter("2", BOX2_X, BOX2_Y, BOX_WIDTH, BOX_HEIGHT, ILI9341_WHITE);
 
-    UI::drawText("Volume: " ,10, 50, ILI9341_WHITE, 2);
+    // Draw volume display.
+    drawText("Vol ", 10, 15, ILI9341_GREEN, 2);
+    tft.drawRect(50, 10, 80, 25, ILI9341_WHITE);
 
+    drawText("Preset:", 10, 80, ILI9341_YELLOW, 2);
+    tft.drawRect(10, 100, tft.width()-20, 45, ILI9341_WHITE);
+    drawText("Project:", 10, 150, ILI9341_ORANGE, 2);
+
+    displayVolume();
+
+    String ip = WiFi.localIP().toString();
+    if (ip == "0.0.0.0")
+        drawText("No WiFi Connection", 10, 225, ILI9341_RED, 2);
+    else
+        drawText(("WebServer:" + ip).c_str(), 10, 225, ILI9341_GREENYELLOW, 2);     
+    // Adjust coordinates as needed.
+
+    // Draw the home menu box.
+    drawHomeMenuBox();
+
+    // If a preset is selected, display the loaded preset info.
     if (selectedPresetSlot != -1) {
         if (presetChanged) {
             totalTracks = loadedPreset.data.songCount;
             presetChanged = false;
         }
-        if (strcmp(loadedPreset.name, "No Preset") == 0 ||
-            strlen(loadedPreset.data.projectName) == 0 ||
-            totalTracks == 0) {
-            drawText("No tracks available.", 10, 80, ILI9341_RED, 3);
-        } else {
-            drawText((String("Preset: ") + loadedPreset.name).c_str(), 10, 80, ILI9341_YELLOW, 2);
-            uint16_t songColor = isPlaying ? ILI9341_GREEN : ILI9341_WHITE;
-            drawText(String(loadedPreset.data.songs[currentTrack].songName).c_str(),
-                        10, 100, songColor, 3);
-            drawText((String(currentTrack + 1) + "/" + String(totalTracks)).c_str(),
-                       tft.width() - 60, 100, ILI9341_WHITE, 2);
-        }
-        // notifyPresetUpdate();
+        drawLoadedPreset();  // Draw only the preset info region.
     } else {
-        drawText("No Preset Selected", 10, 80, ILI9341_RED, 2);
+        // drawText("No Preset Selected", 10, 80, ILI9341_RED, 2);
     }
 }
 
@@ -306,14 +790,7 @@ void UI::menuScreen() {
     tft.fillScreen(ILI9341_BLACK);
     drawTextTopCenter("SETLIST SETTINGS", 7, true, ILI9341_WHITE);
     for (int i = 0; i < NUM_MENU_ITEMS; i++) {
-        int y = 60 + i * 30;
-        tft.fillRect(10, y, 220, 30, ILI9341_BLACK);
-        tft.setCursor(15, y + 5);
-        tft.setTextColor((i == currentMenuItem) ? ILI9341_YELLOW : ILI9341_WHITE);
-        tft.setTextSize(2);
-        char buffer[16];
-        strncpy_P(buffer, menuItems[i], sizeof(buffer));
-        tft.print(buffer);
+        drawMenuItem(i, i == currentMenuItem);
     }
 }
 
@@ -347,91 +824,78 @@ void UI::newSetlistScreen() {
     delay(50);
 
     // Display scanned songs list
-    int itemsPerPage = (tft.height() - 60) / 30 - 1;
-    for (int i = 0; i < itemsPerPage && (i + scrollOffset) < currentProject.songCount; i++) {
-        int idx = i + scrollOffset;
-        int y = 60 + i * 30;
-        tft.setCursor(10, y);
-        if (selectedSongs[idx] && idx == currentMenuItem) {
-        tft.setTextColor(ILI9341_CYAN, ILI9341_BLACK);
-        } else if (selectedSongs[idx]) {
-        tft.setTextColor(ILI9341_GREEN, ILI9341_BLACK);
-        } else if (idx == currentMenuItem) {
-        tft.setTextColor(ILI9341_YELLOW, ILI9341_BLACK);
-        } else {
-        tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK);
-        }
-        tft.print(idx + 1);
-        tft.print(". ");
-        tft.print(currentProject.songs[idx].songName);
-    }
-    char buff[32];
-    snprintf(buff, sizeof(buff), "%d / %d", selectedTrackCount, currentProject.songCount);
-    UI::drawTextTopCenter(buff, 35, false, ILI9341_WHITE);
+    drawSongList();
 }
 
 void UI::editSetlistScreen() {
     tft.fillScreen(ILI9341_BLACK);
     drawRectButton(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT, "Back");
-    drawRectButton(SAVE_BUTTON_X, SAVE_BUTTON_Y, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT, "Save");
+    drawRectButton(SAVE_BUTTON_X, SAVE_BUTTON_Y, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT, "Next");
     drawTextTopCenter("Edit Setlist", 7, true, ILI9341_WHITE);
-    
-        if (selectedTrackCount == 0) {
-            tft.setCursor(10, 60);
-            tft.setTextColor(ILI9341_WHITE);
-            tft.setTextSize(2);
-            tft.print("No songs selected.");
-            return;
-        }
+
+    // If we're creating a NEW setlist (currentMenuItem == 0), require at least one song selected.
+    // If we're editing an existing preset (currentMenuItem == 2), use the loaded preset data.
+    if (selectedTrackCount == 0 && menu1Index == 0) {
+        tft.setCursor(10, 60);
+        tft.setTextColor(ILI9341_WHITE);
+        tft.setTextSize(2);
+        tft.print("No songs selected.");
+        return;
+    }
             
-        // Initialize reordering if needed
-        if (!isReorderedSongsInitialized) {
-            memset(&selectedProject, 0, sizeof(selectedProject));
+    // Initialize reordering if needed.
+    if (!isReorderedSongsInitialized) { 
+        memset(&selectedProject, 0, sizeof(selectedProject));
+        int idx = 0;
+        if (menu1Index == 0) {
+            // New Setlist: copy songs from currentProject where selectedSongs is true.
             strcpy(selectedProject.projectName, currentProject.projectName);
-            int idx = 0;
             for (int i = 0; i < currentProject.songCount; i++) {
-            if (selectedSongs[i]) {
-                selectedProject.songs[idx] = currentProject.songs[i];
-                selectedProject.songs[idx].songIndex  = i;
+                if (selectedSongs[i]) {
+                    selectedProject.songs[idx] = currentProject.songs[i];
+                    selectedProject.songs[idx].songIndex  = i;
+                    selectedProject.songs[idx].changedIndex = idx;
+                    idx++;
+                }
+            }
+            selectedProject.songCount = idx;
+        } else if (menu1Index == 2) {
+            // Edit Setlist: load songs from the loaded preset.
+            strcpy(selectedProject.projectName, loadedPreset.data.projectName);
+            for (int i = 0; i < loadedPreset.data.songCount; i++) {
+                // For editing, copy all songs from loadedPreset.
+                selectedProject.songs[idx] = loadedPreset.data.songs[i];
+                selectedProject.songs[idx].songIndex  = loadedPreset.data.songs[i].songIndex;
                 selectedProject.songs[idx].changedIndex = idx;
                 idx++;
             }
-            }
-            selectedProject.songCount = idx;
-            
-            Serial.println(F("Selected Project Info:"));
-            for (int i = 0; i < selectedProject.songCount; i++) {
+            selectedProject.songCount = loadedPreset.data.songCount;
+            // Update selectedTrackCount to reflect the loaded preset's song count.
+            selectedTrackCount = loadedPreset.data.songCount;
+        }
+        
+        Serial.println(F("Selected Project Info:"));
+        for (int i = 0; i < selectedProject.songCount; i++) {
             Serial.print("Song ");
             Serial.print(selectedProject.songs[i].changedIndex + 1);
             Serial.print(" (OrigIdx ");
             Serial.print(selectedProject.songs[i].songIndex);
             Serial.print(") - ");
             Serial.println(selectedProject.songs[i].songName);
-            }
-            isReorderedSongsInitialized = true;
         }
-        
-        // Display songs in selectedProject
-        int itemsPerPage = min((tft.height() - 60) / 30 - 1, selectedProject.songCount);
-        for (int i = 0; i < itemsPerPage; i++) {
-            int trackIndex = scrollOffset + i;
-            if (trackIndex >= selectedProject.songCount) break;
-            selectedProject.songs[trackIndex].changedIndex = trackIndex;
-            int y = 60 + i * 30;
-            if (isReordering && reorderTarget == trackIndex) {
-            tft.setTextColor(ILI9341_GREEN, ILI9341_BLACK);
-            } else if (!isReordering && trackIndex == currentMenuItem) {
-            tft.setTextColor(ILI9341_YELLOW, ILI9341_BLACK);
-            } else {
-            tft.setTextColor(ILI9341_WHITE, ILI9341_BLACK);
-            }
-            tft.setCursor(10, y);
-            tft.setTextSize(2);
-            tft.print(trackIndex + 1);
-            tft.print(". ");
-            tft.print(selectedProject.songs[trackIndex].songName);
-        }
-        scrollOffset = constrain(scrollOffset, 0, max(0, selectedProject.songCount - itemsPerPage));
+        isReorderedSongsInitialized = true;
+    }
+    
+    // Now, display the song list (show up to 5 items).
+    int itemsPerPage = min(5, selectedProject.songCount);
+    for (int i = 0; i < itemsPerPage; i++) {
+        int absoluteIndex = scrollOffset + i;
+        if (absoluteIndex >= selectedProject.songCount) break;
+        // Draw each item, highlighting the currentMenuItem (if not in reordering mode).
+        bool highlighted = (!isReordering && (absoluteIndex == currentMenuItem));
+        drawEditedSongListItem(absoluteIndex, highlighted);
+    }
+    scrollOffset = constrain(scrollOffset, 0, max(0, selectedProject.songCount - itemsPerPage));
 }
 
 void UI::selectSetlistScreen() {
@@ -440,18 +904,8 @@ void UI::selectSetlistScreen() {
     drawRectButton(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT, "Back");
     drawRectButton(SAVE_BUTTON_X, SAVE_BUTTON_Y, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT, "Save");
 
-    preferences.begin("Setlists", true);
-    for (int i = 1; i <= MAX_PRESETS; i++) {
-        int y = 50 + (i - 1) * 30;
-        tft.setCursor(10, y);
-        tft.setTextColor((i - 1) == currentMenuItem ? ILI9341_YELLOW : ILI9341_WHITE);
-        tft.setTextSize(2);
-        String presetName = preferences.getString(("p" + String(i) + "_name").c_str(), "No Preset");
-        tft.print(i);
-        tft.print(". ");
-        tft.print(presetName);
-    }
-    preferences.end();
+    // Draw the preset list using our helper.
+    drawPresetList();
 }
 
 void UI::saveSetlistScreen() {
@@ -461,18 +915,24 @@ void UI::saveSetlistScreen() {
     drawTextTopCenter("Save Setlist", 7, true, ILI9341_WHITE);
 
     if (selectedPresetSlot == -1) {
-        UI::drawText("No Slot Selected", 10, 50, ILI9341_RED, 2);
+        drawText("No Slot Selected", 10, 50, ILI9341_RED, 2);
         return;
     }
 
-    // Draw setlist name input box and show typed name
-    tft.drawRect(10, 50, tft.width() - 20, 30, ILI9341_WHITE);
-    tft.setCursor(15, 57);
-    tft.setTextColor(ILI9341_WHITE);
-    tft.setTextSize(2);
-    tft.print(setlistName);
+    // Load the preset name from Preferences
+    preferences.begin("Setlists", true);
+    String presetName = preferences.getString(("p" + String(selectedPresetSlot) + "_name").c_str(), "No Preset");
+    preferences.end();
+    // If the preset already has a name, load it into setlistName
+    if (presetName != "No Preset") {
+        presetName.toCharArray(setlistName, MAX_SONG_NAME_LEN + 1);
+    }
+    // Otherwise, setlistName remains as is (or can be cleared if desired)
 
-    // Draw on-screen keyboard
+    // Draw the input box (only the input text area and clear button)
+    drawSetlistName();
+
+    // Draw the on-screen keyboard (which updates only that area)
     drawKeyboard(isShifted);
 }
 
@@ -480,13 +940,7 @@ void UI::menu2Screen() {
     tft.fillScreen(ILI9341_BLACK);
     drawTextTopCenter("System Settings", 7, true, ILI9341_WHITE);
     for (int i = 0; i < NUM_MENU2_ITEMS; i++) {
-        int y = 60 + i * 30;
-        tft.setCursor(15, y + 5);
-        tft.setTextSize(2);
-        tft.setTextColor((i == currentMenu2Item) ? ILI9341_YELLOW : ILI9341_WHITE);
-        char buffer[16];
-        strncpy_P(buffer, menu2Items[i], sizeof(buffer));
-        tft.print(buffer);
+        drawMenu2Item(i, i == currentMenu2Item);
     }
 }
 
@@ -505,51 +959,12 @@ void UI::menu2WifiSettingsScreen() {
 }
 
 void UI::menu2WifiConnectScreen() {
-    // Draw the static portion (header and navigation buttons) only once.
-    static bool staticDrawn = false;
-    if (!staticDrawn) {
-        tft.fillScreen(ILI9341_BLACK);
-        drawTextTopCenter("Wi-Fi Connect", 7, true, ILI9341_WHITE);
-        drawRectButton(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT, "Back");
-        drawRectButton(NEXT_BUTTON_X, NEXT_BUTTON_Y, NEXT_BUTTON_WIDTH, NEXT_BUTTON_HEIGHT, "Rescan");
-        staticDrawn = true;
-    }
+    tft.fillScreen(ILI9341_BLACK);
+    drawRectButton(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT, "Back");
+    drawRectButton(NEXT_BUTTON_X, NEXT_BUTTON_Y, NEXT_BUTTON_WIDTH, NEXT_BUTTON_HEIGHT, "Re");
+    drawTextTopCenter("Wi-Fi Connect", 7, true, ILI9341_WHITE);
 
-    // Start a new Wi‑Fi scan if one hasn't been started.
-    if (!wifiScanInProgress && !wifiScanDone) {
-        Serial.println(F("Starting Async Wi-Fi Scan..."));
-        WiFi.mode(WIFI_STA);
-        WiFi.disconnect(true);
-        delay(100);
-        WiFi.scanNetworks(true);
-        wifiScanInProgress = true;
-    }
-
-    // Poll for scan results while in progress.
-    if (wifiScanInProgress) {
-        int scanResult = WiFi.scanComplete();
-        Serial.printf("Scan result: %d\n", scanResult);  // Debug print
-        if (scanResult >= 0) {  // Scan complete
-            wifiCount = (scanResult < MAX_WIFI_NETWORKS) ? scanResult : MAX_WIFI_NETWORKS;
-            for (int i = 0; i < wifiCount; i++) {
-                wifiSSIDs[i] = WiFi.SSID(i);
-                wifiRSSI[i] = WiFi.RSSI(i);
-            }
-            wifiScanDone = true;
-            wifiScanInProgress = false;
-        } else {
-            // Clear only the dynamic region and show a "Scanning..." message.
-            tft.fillRect(10, 60, tft.width() - 20, 160, ILI9341_BLACK);
-            drawText("Scanning...", 10, 60, ILI9341_YELLOW, 2);
-            return;  // Exit until the scan completes.
-        }
-    }
-
-    // Once the scan is complete, update only the dynamic region (Wi‑Fi list).
-    if (wifiScanDone) {
-        tft.fillRect(10, 60, tft.width() - 20, 160, ILI9341_BLACK);
-        drawWiFiList();
-    }
+    WifiScan();
 }
 
 void UI::menu2WifiPasswordScreen() {
@@ -559,12 +974,12 @@ void UI::menu2WifiPasswordScreen() {
     drawRectButton(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT, "Back");
     drawRectButton(SAVE_BUTTON_X, SAVE_BUTTON_Y, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT, "OK");
 
+    // Draw the input box border once.
     tft.drawRect(10, 50, tft.width() - 20, 30, ILI9341_WHITE);
-    tft.setCursor(15, 57);
-    tft.setTextSize(2);
-    tft.setTextColor(ILI9341_WHITE);
-    tft.print(wifiPassword);
+    // Draw the initial password (if any) in the text area.
+    drawWiFiPassword();
 
+    // Draw the on-screen keyboard.
     drawKeyboard(isShifted);
 }
 

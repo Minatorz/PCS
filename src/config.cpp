@@ -19,6 +19,8 @@ unsigned long lastPingReplyTime = 0;
 
 bool webServerStarted = false;  
 
+int menu1Index = 0;  
+
 int currentMenuItem = 0;
 int scrollOffset = 0;
 int totalTracks = 0;
