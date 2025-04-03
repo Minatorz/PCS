@@ -21,13 +21,14 @@ bool webServerStarted = false;
 
 int menu1Index = 0;  
 
-int currentMenuItem = 0;
+int currentSongItem = 0;
 int scrollOffset = 0;
 int totalTracks = 0;
 int currentTrack = 0;
 bool needsRedraw = true;
 int selectedHomeSongIndex = 0;
 
+int currentMenuItem = 0;
 int currentMenu2Item = 0;
 int currentWifiMenuItem = 0;
 

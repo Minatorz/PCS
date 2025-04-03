@@ -100,13 +100,15 @@ extern unsigned long lastPingReplyTime;
 extern bool webServerStarted;  
 
 // UI Navigation and Menu variables
-extern int currentMenuItem;
+
+extern int currentSongItem;
 extern int scrollOffset;       // For scrolling lists on the display
 extern int totalTracks;        // Total songs in loaded preset
 extern int currentTrack;       // Currently active track
 extern bool needsRedraw;
 extern int selectedHomeSongIndex;
 
+extern int currentMenuItem;
 extern int currentMenu2Item;   // Highlight index for Menu2
 extern int currentWifiMenuItem;   // Highlight index for Wi-Fi sub-menu
 

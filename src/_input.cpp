@@ -383,40 +383,41 @@ void Input::handleRotary() {
               {
                 int prevIndex = currentMenuItem;
                 // Update currentMenuItem based on encoder input:
-                if (dtState == clkState)
+                if (dtState == clkState) {
                     currentMenuItem = (currentMenuItem + 1) % NUM_MENU_ITEMS;
-                else
+                    Serial.println(currentMenuItem);
+                } else {
                     currentMenuItem = (currentMenuItem - 1 + NUM_MENU_ITEMS) % NUM_MENU_ITEMS;
-                
+                    Serial.println(currentMenuItem);
+                } 
                 // Update only the two items that changed.
                 ui->updateMenuSelection(prevIndex, currentMenuItem);
-                currentMenuItem = 0;
               }
                 break;
                 case ScreenState::NEW_SETLIST:
                 if (currentProject.songCount > 0) {
                     int itemsPerPage = 5;  // Fixed visible count
-                    int previousItem = currentMenuItem;
+                    int previousItem = currentSongItem;
                     int previousScrollOffset = scrollOffset;
                     
                     // Update currentMenuItem with wrap-around.
                     if (dtState == clkState) { // Clockwise rotation.
-                        if (currentMenuItem == currentProject.songCount - 1)
-                            currentMenuItem = 0;
+                        if (currentSongItem == currentProject.songCount - 1)
+                            currentSongItem = 0;
                         else
-                            currentMenuItem++;
+                            currentSongItem++;
                     } else { // Counter-clockwise rotation.
-                        if (currentMenuItem == 0)
-                            currentMenuItem = currentProject.songCount - 1;
+                        if (currentSongItem == 0)
+                            currentSongItem = currentProject.songCount - 1;
                         else
-                            currentMenuItem--;
+                            currentSongItem--;
                     }
                     
                     // Adjust scrollOffset to ensure the currentMenuItem is visible.
-                    if (currentMenuItem < scrollOffset)
-                        scrollOffset = currentMenuItem;
-                    else if (currentMenuItem >= scrollOffset + itemsPerPage)
-                        scrollOffset = currentMenuItem - itemsPerPage + 1;
+                    if (currentSongItem < scrollOffset)
+                        scrollOffset = currentSongItem;
+                    else if (currentSongItem >= scrollOffset + itemsPerPage)
+                        scrollOffset = currentSongItem - itemsPerPage + 1;
                     
                     // If the scroll window has changed (or if we wrapped), redraw the entire list.
                     if (scrollOffset != previousScrollOffset) {
@@ -424,7 +425,7 @@ void Input::handleRotary() {
                     } else {
                         // Otherwise, update only the affected items.
                         ui->drawSongListItem(previousItem, false);
-                        ui->drawSongListItem(currentMenuItem, true);
+                        ui->drawSongListItem(currentSongItem, true);
                     }
                     // currentMenuItem = 0;
                 }
@@ -499,39 +500,39 @@ void Input::handleRotary() {
                       }
                   } else {
                       // Non-reordering branch with wrap-around (as previously implemented).
-                      int previousItem = currentMenuItem;
+                      int previousItem = currentSongItem;
                       int previousScrollOffset = scrollOffset;
                       int total = selectedProject.songCount;
                       
                       if (dtState == clkState) {  // Clockwise: move down.
-                          if (currentMenuItem == total - 1)
-                              currentMenuItem = 0;
+                          if (currentSongItem == total - 1)
+                              currentSongItem = 0;
                           else
-                              currentMenuItem++;
+                              currentSongItem++;
                       } else {  // Counter-clockwise: move up.
-                          if (currentMenuItem == 0)
-                              currentMenuItem = total - 1;
+                          if (currentSongItem == 0)
+                              currentSongItem = total - 1;
                           else
-                              currentMenuItem--;
+                              currentSongItem--;
                       }
                       
                       // Adjust scrollOffset.
-                      if (currentMenuItem == 0)
+                      if (currentSongItem == 0)
                           scrollOffset = 0;
-                      else if (currentMenuItem == total - 1)
+                      else if (currentSongItem == total - 1)
                           scrollOffset = max(total - itemsPerPage, 0);
                       else {
-                          if (currentMenuItem < scrollOffset)
-                              scrollOffset = currentMenuItem;
-                          else if (currentMenuItem >= scrollOffset + itemsPerPage)
-                              scrollOffset = currentMenuItem - itemsPerPage + 1;
+                          if (currentSongItem < scrollOffset)
+                              scrollOffset = currentSongItem;
+                          else if (currentSongItem >= scrollOffset + itemsPerPage)
+                              scrollOffset = currentSongItem - itemsPerPage + 1;
                       }
                       
                       if (scrollOffset != previousScrollOffset) {
                           ui->drawEditedSongList();
                       } else {
                           ui->drawEditedSongListItem(previousItem, false);
-                          ui->drawEditedSongListItem(currentMenuItem, true);
+                          ui->drawEditedSongListItem(currentSongItem, true);
                       }
                   }
               } break;                     
@@ -580,7 +581,6 @@ void Input::handleRotary() {
                 else
                   currentMenu2Item = (currentMenu2Item - 1 + NUM_MENU2_ITEMS) % NUM_MENU2_ITEMS;
                   ui->updateMenu2Selection(prevIndex, currentMenu2Item);
-                currentMenuItem = 0;
               }
                 break;
               case ScreenState::MENU2_WIFISETTINGS:
@@ -667,9 +667,9 @@ void Input::handleRotary() {
           case ScreenState::NEW_SETLIST:
             if (currentProject.songCount > 0) {
                 // Toggle the selection of the current song.
-                selectedSongs[currentMenuItem] = !selectedSongs[currentMenuItem];
-                selectedTrackCount += selectedSongs[currentMenuItem] ? 1 : -1;
-                ui->drawSongListItem(currentMenuItem, true);
+                selectedSongs[currentSongItem] = !selectedSongs[currentSongItem];
+                selectedTrackCount += selectedSongs[currentSongItem] ? 1 : -1;
+                ui->drawSongListItem(currentSongItem, true);
                 
                 // Optionally, update the status text (e.g., "3 / 10")
                 ui->updateSelectedSongCount();
@@ -679,16 +679,16 @@ void Input::handleRotary() {
         case ScreenState::EDIT_SETLIST:
             if (isReordering) {
             isReordering = false;
-            currentMenuItem = reorderTarget;
+            currentSongItem = reorderTarget;
             ui->drawEditedSongList();
             } else {
-            reorderTarget = currentMenuItem;
+            reorderTarget = currentSongItem;
             isReordering = true;
-            ui->drawEditedSongListItem(currentMenuItem, true);
+            ui->drawEditedSongListItem(currentSongItem, true);
             }
             break;
         case ScreenState::SELECT_SETLIST:
-            selectedPresetSlot = currentMenuItem + 1;
+            selectedPresetSlot = currentSongItem + 1;
             Serial.print(F("✅ Selected Setlist Slot via Encoder: "));
             Serial.println(selectedPresetSlot);
             ui->setScreenState(ScreenState::SAVE_SETLIST);
@@ -749,6 +749,7 @@ void Input::StartButton() {
               // Update only the track display region so that the text turns green.
               ui->drawLoadedPreset();
           }
+
       }
   }
 }
@@ -786,19 +787,21 @@ void Input::LeftButton() {
   
   // Check for transition from not-pressed to pressed.
   if (lastLeftState == HIGH && btnLeftState == LOW) {
-      if (millis() - lastPressTime > debounceDelay) {
-          // Trigger event only once per press.
-          if (selectedPresetSlot != -1 && totalTracks > 0) {
-              currentTrack = (currentTrack - 1 + totalTracks) % totalTracks;
-              Serial.println(F("Moved to previous track"));
-              presetChanged = true;  // Mark that the track has changed.
-              // Update the homepage preset display partially.
-              ui->drawLoadedPreset();
-          } else {
-              Serial.println(F("No tracks available to navigate (left)."));
-          }
-          lastPressTime = millis();
-      }
+    if (!isPlaying) {
+        if (millis() - lastPressTime > debounceDelay) {
+            // Trigger event only once per press.
+            if (selectedPresetSlot != -1 && totalTracks > 0) {
+                currentTrack = (currentTrack - 1 + totalTracks) % totalTracks;
+                Serial.println(F("Moved to previous track"));
+                presetChanged = true;  // Mark that the track has changed.
+                // Update the homepage preset display partially.
+                ui->drawLoadedPreset();
+            } else {
+                Serial.println(F("No tracks available to navigate (left)."));
+            }
+            lastPressTime = millis();
+        }
+    }
   }
   lastLeftState = btnLeftState;
 }
@@ -811,17 +814,19 @@ void Input::RightButton() {
   bool btnRightState = digitalRead(BTN_RIGHT);
   
   if (lastRightState == HIGH && btnRightState == LOW) {
-      if (millis() - lastPressTime > debounceDelay) {
-          if (selectedPresetSlot != -1 && totalTracks > 0) {
-              currentTrack = (currentTrack + 1) % totalTracks;
-              Serial.println(F("Moved to next track"));
-              presetChanged = true;  // Mark that the track has changed.
-              ui->drawLoadedPreset();
-          } else {
-              Serial.println(F("No tracks available to navigate (right)."));
-          }
-          lastPressTime = millis();
-      }
+    if (!isPlaying) {
+        if (millis() - lastPressTime > debounceDelay) {
+            if (selectedPresetSlot != -1 && totalTracks > 0) {
+                currentTrack = (currentTrack + 1) % totalTracks;
+                Serial.println(F("Moved to next track"));
+                presetChanged = true;  // Mark that the track has changed.
+                ui->drawLoadedPreset();
+            } else {
+                Serial.println(F("No tracks available to navigate (right)."));
+            }
+            lastPressTime = millis();
+        }
+    }
   }
   lastRightState = btnRightState;
 }

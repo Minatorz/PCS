@@ -593,7 +593,7 @@ void UI::drawLoadedPreset() {
         drawText((String(currentTrack + 1) + "/" + String(totalTracks)).c_str(),
                  150, 16, ILI9341_WHITE, 2);
     }
-    
+    webServerManager.notifyPresetUpdate();
     // Reset the flag after drawing.
     presetChanged = false;
 }
@@ -671,6 +671,11 @@ void UI::checkWifiConnection() {
             static bool webServerSetupDone = false;
             if (!webServerSetupDone) {
                 webServerManager.setup();
+                webServerManager.onPresetUpdate = [this]() {
+                    if (selectedPresetSlot != -1) {
+                        drawLoadedPreset(); // Redraw only if a preset is selected
+                    }
+                };
                 webServerSetupDone = true;
             }
             // webServerManager.update(); // This call is optional here.
@@ -784,6 +789,7 @@ void UI::homeScreen() {
     } else {
         // drawText("No Preset Selected", 10, 80, ILI9341_RED, 2);
     }
+    webServerManager.notifyPresetUpdate();
 }
 
 void UI::menuScreen() {

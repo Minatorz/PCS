@@ -3,60 +3,233 @@
 <head>
   <meta charset="UTF-8">
   <title>AbletonThesis Home</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
+    /* Prevent all scrolling/zooming */
+    html, body {
+      overflow: hidden;
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      -webkit-overflow-scrolling: touch;
+    }
+
     body {
       background-color: #000;
       color: #fff;
       font-family: Arial, sans-serif;
       text-align: center;
       margin: 0;
-      padding: 0;
+      padding: 2vh;
+      touch-action: none; /* Disable all touch gestures */
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      overscroll-behavior: none; /* Disable pull-to-refresh */
     }
-    .info { margin: 20px; }
-    .info p { margin: 5px 0; font-size: 1.2em; }
+    
+    .header {
+      margin-bottom: 3vh;
+      text-align: left;
+      font-size: 2.5vh;
+      flex-shrink: 0;
+    }
+    
+    .song-info {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      margin: 3vh 0;
+      overflow: hidden; /* Prevent content from causing scroll */
+    }
+    
+    .song-position {
+      font-size: 3vh;
+      margin-bottom: 2vh;
+      opacity: 0.8;
+    }
+    
+    .song-name {
+      font-size: 6vh;
+      font-weight: bold;
+      margin: 3vh 0;
+      min-height: 7vh;
+      word-break: break-word;
+      max-width: 90vw;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2; /* Limit to 2 lines max */
+      -webkit-box-orient: vertical;
+    }
+    
+    .controls {
+      margin-top: auto;
+      padding-bottom: 2vh;
+      flex-shrink: 0;
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    
+    button {
+      font-size: 2.5vh;
+      padding: 2vh 4vw;
+      margin: 1vh 1.5vw;
+      background-color: #444;
+      color: #fff;
+      border: none;
+      border-radius: 1vh;
+      cursor: pointer;
+      min-width: 15vw;
+      touch-action: manipulation; /* Better touch response */
+    }
+    
+    button:hover {
+      background-color: #666;
+    }
+    
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    #playBtn {
+      background-color: #2E7D32;
+    }
+    
+    #playBtn.playing {
+      background-color: #4CAF50;
+    }
+    
+    #stopBtn {
+      background-color: #C62828;
+    }
+    
+    .playing-text {
+      color: #4CAF50;
+    }
+
+    @media (orientation: landscape) {
+      .song-name {
+        font-size: 5vh;
+        -webkit-line-clamp: 3; /* Allow more lines in landscape */
+      }
+      button {
+        padding: 2vh 3vw;
+        margin: 1vh 1vw;
+      }
+    }
+
+    /* Completely disable double-tap zoom */
+    * {
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+    }
   </style>
 </head>
 <body>
-  <h1>Home Page</h1>
-  <div class="info">
-    <p>Preset: <span id="presetName">No Preset Selected</span></p>
+  <div class="header">
+    <p>Setlist: <span id="presetName">No Setlist Selected</span></p>
     <p>Project: <span id="projectName">N/A</span></p>
-    <p>Song Count: <span id="songCount">0</span></p>
-    <div id="songsList"></div>
   </div>
-  <script>
-    // Connect to the WebSocket server on the same host
-    const socket = new WebSocket(`ws://${window.location.hostname}/ws`);
+  
+  <div class="song-info">
+    <div class="song-position">
+      <span id="currentTrackDisplay">0</span>/<span id="songCount">0</span>
+    </div>
+    <div class="song-name" id="currentSong">No song loaded</div>
+  </div>
+  
+  <div class="controls">
+    <button id="prevBtn">Prev</button>
+    <button id="playBtn">Play</button>
+    <button id="stopBtn">Stop</button>
+    <button id="nextBtn">Next</button>
+  </div>
 
+  <script>
+    // Prevent any touchmove events that could cause scrolling
+    document.addEventListener('touchmove', function(e) {
+      if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    // Keep your existing JavaScript exactly the same
+    let currentSongIndex = 0;
+    let currentTrack = 0;
+  
+    const socket = new WebSocket(`ws://${window.location.hostname}/ws`);
+  
     socket.onopen = () => {
       console.log("WebSocket connected");
     };
-
+  
     socket.onerror = (err) => {
       console.error("WebSocket error", err);
     };
-
-    // When a message is received, update the webpage
+  
     socket.onmessage = function(event) {
       try {
         const data = JSON.parse(event.data);
-        document.getElementById("presetName").innerText = data.name;
-        document.getElementById("projectName").innerText = data.projectName;
-        document.getElementById("songCount").innerText = data.songCount;
+
+        if (data.eventType === "INITIAL_STATE") {
+          updateUI(data);
+          return;
+        }
+
+        const isPlaying = data.playbackStatus === "PLAYING";
         
-        // Update song list
-        const songsListDiv = document.getElementById("songsList");
-        songsListDiv.innerHTML = ""; // Clear current list
-        data.songs.forEach((song, index) => {
-          const p = document.createElement("p");
-          p.innerText = `${index + 1}. ${song.songName} (Index: ${song.songIndex})`;
-          songsListDiv.appendChild(p);
-        });
+        document.getElementById("prevBtn").disabled = isPlaying;
+        document.getElementById("nextBtn").disabled = isPlaying;
+        
+        const playBtn = document.getElementById("playBtn");
+        playBtn.classList.toggle("playing", isPlaying);
+        
+        updateUI(data);
       } catch (e) {
         console.error("Error parsing JSON:", e);
       }
     };
+
+    function updateUI(data) {
+      document.getElementById("presetName").innerText = data.name || "No Setlist Selected";
+      document.getElementById("projectName").innerText = data.projectName || "N/A";
+      document.getElementById("songCount").innerText = data.songCount || "0";
+
+      currentSongIndex = data.currentTrack || 0;
+      document.getElementById("currentTrackDisplay").innerText = currentSongIndex + 1;
+      
+      const songElement = document.getElementById("currentSong");
+      const song = data.songs?.[currentSongIndex]?.songName || "No song available";
+      songElement.innerText = song;
+      
+      songElement.className = "song-name";
+      if (data.playbackStatus === "PLAYING") {
+        songElement.classList.add("playing-text");
+      }
+    }
+  
+    document.getElementById("prevBtn").addEventListener("click", () => {
+      socket.send("prev");
+    });
+  
+    document.getElementById("nextBtn").addEventListener("click", () => {
+      socket.send("next");
+    });
+
+    document.getElementById("playBtn").addEventListener("click", () => {
+      socket.send("play");
+    });
+
+    document.getElementById("stopBtn").addEventListener("click", () => {
+      socket.send("stop");
+    });
   </script>
 </body>
 </html>

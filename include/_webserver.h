@@ -4,6 +4,7 @@
 #include <ESPAsyncWebServer.h>
 #include <AsyncTCP.h>
 #include <LittleFS.h>
+#include "_ui.h"
 
 class AsyncWebServerManager {
 private:
@@ -29,6 +30,24 @@ private:
             if (type == WS_EVT_CONNECT) {
                 Serial.printf("WebSocket client connected, id: %u\n", client->id());
                 client->text("Welcome to the Async WebSocket Server");
+                if (selectedPresetSlot != -1) {  // If a preset is loaded
+                    String json = "{";
+                    json += "\"eventType\":\"INITIAL_STATE\",";
+                    json += "\"name\":\"" + String(loadedPreset.name) + "\",";
+                    json += "\"projectName\":\"" + String(loadedPreset.data.projectName) + "\",";
+                    json += "\"songCount\":" + String(loadedPreset.data.songCount) + ",";
+                    json += "\"currentTrack\":" + String(currentTrack) + ",";
+                    json += "\"playbackStatus\":\"" + String(isPlaying ? "PLAYING" : "STOPPED") + "\",";
+                    json += "\"songs\":[";
+                    for (int i = 0; i < loadedPreset.data.songCount; i++) {
+                        json += "{\"songName\":\"" + String(loadedPreset.data.songs[i].songName) + "\",";
+                        json += "\"songIndex\":" + String(loadedPreset.data.songs[i].songIndex) + "}";
+                        if (i < loadedPreset.data.songCount - 1) json += ",";
+                    }
+                    json += "]}";
+                    
+                    client->text(json);
+                }
             } else if (type == WS_EVT_DISCONNECT) {
                 Serial.printf("WebSocket client disconnected, id: %u\n", client->id());
             } else if (type == WS_EVT_DATA) {
@@ -37,6 +56,29 @@ private:
                     msg += (char)data[i];
                 }
                 Serial.printf("WebSocket received: %s\n", msg.c_str());
+                if (msg == "prev" || msg == "next") {
+                    if (!isPlaying) {  // Only allow navigation when stopped
+                        if (msg == "prev") {
+                            if (currentTrack > 0) currentTrack--;
+                            else currentTrack = loadedPreset.data.songCount - 1;
+                        } 
+                        else {
+                            currentTrack = (currentTrack + 1) % loadedPreset.data.songCount;
+                        }
+                        notifyPresetUpdate();
+                    }
+                    // No response sent if playback is active
+                } else if (msg == "play") {
+                    isPlaying = true;
+                    Midi::Play(loadedPreset.data.songs[currentTrack].songIndex);
+                    notifyPresetUpdate(); // Sync state to all clients
+                    // ui->drawLoadedPreset(); // Update device display
+                } else if (msg == "stop") {
+                    isPlaying = false;
+                    Midi::Stop();
+                    notifyPresetUpdate(); // Sync state to all clients
+                    // ui->drawLoadedPreset(); // Update device display
+                }
                 // If the message starts with "GET_FILE:", read and return file content.
                 if (msg.startsWith("GET_FILE:")) {
                     String filename = msg.substring(9); // Extract filename after "GET_FILE:"
@@ -98,6 +140,42 @@ public:
     bool isRunning() const {
         return serverStarted;
     }
+
+    void notifyPresetUpdate() {
+        static String lastBroadcast;
+        // Build a JSON string with preset data
+        String json = "{";
+        json += "\"name\":\"" + String(loadedPreset.name) + "\",";
+        json += "\"projectName\":\"" + String(loadedPreset.data.projectName) + "\",";
+        json += "\"songCount\":" + String(loadedPreset.data.songCount) + ",";
+        json += "\"currentTrack\":" + String(currentTrack) + ",";
+        json += "\"playbackStatus\":\"" + String(isPlaying ? "PLAYING" : "STOPPED") + "\",";
+        json += "\"songs\":[";
+        for (int i = 0; i < loadedPreset.data.songCount; i++) {
+          json += "{";
+          json += "\"songName\":\"" + String(loadedPreset.data.songs[i].songName) + "\",";
+          json += "\"songIndex\":" + String(loadedPreset.data.songs[i].songIndex);
+          json += "}";
+          if (i < loadedPreset.data.songCount - 1)
+            json += ",";
+        }
+        json += "]}";
+        
+        if (json == lastBroadcast) {
+            return;
+        }
+        lastBroadcast = json;
+        ws.textAll(json);
+        // Broadcast the JSON message to all connected WebSocket clients
+        Serial.println("Preset updated and broadcasted: " + json);
+
+        if (onPresetUpdate) {
+            onPresetUpdate();
+        }
+    }
+
+    std::function<void()> onPresetUpdate;
+
 };
 
 #endif // ASYNCWEBSERVERMANAGER_H
