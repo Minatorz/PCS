@@ -335,8 +335,16 @@ void Input::handleTouch() {
             if (ui->isTouch(tx, ty, SAVE_BUTTON_X, SAVE_BUTTON_Y, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT)) {
                 Serial.printf("Connecting to SSID: %s with password: %s\n",
                             selectedSSID.c_str(), wifiPassword);
+
+                WiFi.disconnect(true);
+                delay(1000);  // Wait for a second before reconnecting
+                WiFi.mode(WIFI_STA);
+                WiFi.setSleep(false);  // Disable sleep mode
                 WiFi.begin(selectedSSID.c_str(), wifiPassword);
+                Serial.printf("WiFi status: %d\n", WiFi.status());
+
                 ui->setScreenState(ScreenState::MENU2_WIFICONNECTING);
+
                 return;
             }
             ui->updateScreen();
@@ -834,6 +842,7 @@ void Input::RightButton() {
 void Input::handleVolume() {
     static byte lastMidiVolume = 255;
     int potValue = analogRead(POT_VOL);
+    // Serial.println(potValue);
     byte midiVol = map(potValue, 0, 4095, 0, 127);
     
     if (midiVol != lastMidiVolume) {

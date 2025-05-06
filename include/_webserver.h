@@ -143,6 +143,8 @@ public:
 
     void notifyPresetUpdate() {
         static String lastBroadcast;
+        uint64_t start_us = esp_timer_get_time();
+        uint32_t start_ms = millis();
         // Build a JSON string with preset data
         String json = "{";
         json += "\"name\":\"" + String(loadedPreset.name) + "\",";
@@ -169,9 +171,13 @@ public:
         // Broadcast the JSON message to all connected WebSocket clients
         Serial.println("Preset updated and broadcasted: " + json);
 
+
         if (onPresetUpdate) {
             onPresetUpdate();
         }
+        uint64_t end_us = esp_timer_get_time();
+        uint32_t end_ms = millis();
+        Serial.printf("Latency: %lld µs | %d ms\n", end_us - start_us, end_ms - start_ms);
     }
 
     std::function<void()> onPresetUpdate;

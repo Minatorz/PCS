@@ -660,6 +660,25 @@ void UI::drawWiFiListItem(int absoluteIndex, bool highlighted) {
 
 void UI::checkWifiConnection() {
     if (currentState == ScreenState::MENU2_WIFICONNECTING) {
+        Serial.printf("WiFi status: %d\n", WiFi.status());
+        unsigned long startAttemptTime = millis();
+        // Check if the Wi-Fi connection is established.unsigned long startAttemptTime = millis();
+        const unsigned long wifiTimeout = 5000; // 5 seconds
+
+        while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < wifiTimeout) {
+            delay(100); // avoid watchdog reset
+            }
+            
+            // Check if connected or timeout occurred
+            if (WiFi.status() == WL_CONNECTED) {
+                Serial.println("Connected to WiFi!");
+                // Proceed with connected logic (e..beg., ui->setScreenState(...))
+            } else {
+                Serial.println("Failed to connect to WiFi within 5 seconds.");
+                WiFi.disconnect(); // optional
+                setScreenState(ScreenState::HOME);
+            }
+
         if (WiFi.status() == WL_CONNECTED && !wifiFullyConnected) {
             wifiFullyConnected = true;
             digitalWrite(LED_WIFI, HIGH);
@@ -691,6 +710,7 @@ void UI::WifiScan() {
     if (!wifiScanInProgress && !wifiScanDone) {
         Serial.println(F("Starting Async Wi-Fi Scan..."));
         WiFi.mode(WIFI_STA);      // Set Wi-Fi mode to Station (STA)
+        WiFi.setSleep(false);
         WiFi.disconnect(true);    // Disconnect from any previous Wi-Fi connection
         delay(100);               // Wait briefly before scanning
         WiFi.scanNetworks(true);  // Start scanning asynchronously

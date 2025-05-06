@@ -37,6 +37,8 @@ void pingTask(void *pvParameters) {
 // ----------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
+  while (!Serial);  // Optional: wait for serial port to connect
+  Serial.println("Boot complete");
   Midi::begin();
 
   // Configure pins
@@ -57,7 +59,6 @@ void setup() {
   ui.init();
   // Initialize preferences
   ps::initPreferences();
-
 
   // Start with LOADING screen
   ui.updateScreen();
