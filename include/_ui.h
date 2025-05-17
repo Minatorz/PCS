@@ -35,6 +35,7 @@ public:
     XPT2046_Touchscreen &getTouchscreen() { return ts; }
     int getCurrentHomeMenuSelection() const { return currentHomeMenuSelection; }
     int getCurrentMenuItem() const { return currentMenuItem; }
+    int currentSongIndex = 0; // The currently selected song index (0-indexed)
 
 
     int currentPresetIndex = 0;      // The currently selected preset index (0-indexed)

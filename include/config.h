@@ -19,7 +19,7 @@
 #define TFT_DC    8
 #define TFT_RST   9
 #define T_CS      15
-#define T_IRQ     21
+#define T_IRQ     3
 
 // -----------------------------------------------------
 // MENU AND BUTTON MACROS

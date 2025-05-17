@@ -35,6 +35,7 @@ void Input::handleTouch() {
                 int y = 60 + i * 30;
                 if (ui->isTouch(tx, ty, 10, y, 220, 30)) {
                 menu1Index = i;  // Assuming currentMenuItem is global or accessible through ui.
+
                 switch (menu1Index) {
                     case 0:
                     ui->setScreenState(ScreenState::NEW_SETLIST);
@@ -125,7 +126,7 @@ void Input::handleTouch() {
                     Serial.print(F("✅ Selected Setlist Slot: "));
                     Serial.println(selectedPresetSlot);
                     if (menu1Index == 1) {
-                    loadedPreset = ps::loadPresetFromDevice(selectedPresetSlot);
+                        loadedPreset = ps::loadPresetFromDevice(selectedPresetSlot);
                         ui->setScreenState(ScreenState::HOME);
                     } else if (menu1Index == 3) {
                         ps::deletePresetFromDevice(selectedPresetSlot);
@@ -153,6 +154,7 @@ void Input::handleTouch() {
                   ps::savePresetToDevice(selectedPresetSlot, loadedPreset);
                   Serial.print(F("✅ Setlist Saved in: "));
                   Serial.println(selectedPresetSlot);
+                  loadedPreset = ps::loadPresetFromDevice(selectedPresetSlot);
                   isReorderedSongsInitialized = false;
                   ui->setScreenState(ScreenState::HOME);
               }
@@ -339,9 +341,13 @@ void Input::handleTouch() {
                 WiFi.disconnect(true);
                 delay(1000);  // Wait for a second before reconnecting
                 WiFi.mode(WIFI_STA);
+                WiFi.persistent(false);  // Don't save the connection to flash
+                WiFi.setAutoConnect(false);
+                WiFi.setAutoReconnect(false);
                 WiFi.setSleep(false);  // Disable sleep mode
                 WiFi.begin(selectedSSID.c_str(), wifiPassword);
-                Serial.printf("WiFi status: %d\n", WiFi.status());
+                Serial.printf("SSID length: %d, Password length: %d\n", 
+                    selectedSSID.length(), strlen(wifiPassword));
 
                 ui->setScreenState(ScreenState::MENU2_WIFICONNECTING);
 
@@ -372,16 +378,16 @@ void Input::handleTouch() {
 }
 
 void Input::handleRotary() {
-    // Read the rotary encoder pins.
+    // Read the rotary encoder pins
     bool clkState = digitalRead(ENC_CLK);
-    bool dtState  = digitalRead(ENC_DT);
+    bool dtState = digitalRead(ENC_DT);
     static bool lastClkState = clkState;
     ScreenState cs = ui->getScreenState();
-    
-    if (clkState != encoderLastState && clkState == LOW) {
+
+    if (clkState != encoderLastState) {
             switch (cs) {
               case ScreenState::HOME:
-              if (dtState == clkState)
+              if (dtState != clkState)
                 ui->updateHomeMenuSelection(1);   // move selection forward
               else
                 ui->updateHomeMenuSelection(-1);  // move selection backward
@@ -391,7 +397,7 @@ void Input::handleRotary() {
               {
                 int prevIndex = currentMenuItem;
                 // Update currentMenuItem based on encoder input:
-                if (dtState == clkState) {
+                if (dtState != clkState) {
                     currentMenuItem = (currentMenuItem + 1) % NUM_MENU_ITEMS;
                     Serial.println(currentMenuItem);
                 } else {
@@ -409,7 +415,7 @@ void Input::handleRotary() {
                     int previousScrollOffset = scrollOffset;
                     
                     // Update currentMenuItem with wrap-around.
-                    if (dtState == clkState) { // Clockwise rotation.
+                    if (dtState != clkState) { // Clockwise rotation.
                         if (currentSongItem == currentProject.songCount - 1)
                             currentSongItem = 0;
                         else
@@ -420,6 +426,7 @@ void Input::handleRotary() {
                         else
                             currentSongItem--;
                     }
+                    ui->currentSongIndex = currentSongItem;
                     
                     // Adjust scrollOffset to ensure the currentMenuItem is visible.
                     if (currentSongItem < scrollOffset)
@@ -447,7 +454,7 @@ void Input::handleRotary() {
                       int total = selectedProject.songCount;
                       
                       // Handle reordering with wrap-around.
-                      if (dtState == clkState) {  // Clockwise rotation.
+                      if (dtState != clkState) {  // Clockwise rotation.
                           if (reorderTarget == total - 1) {
                               // Wrap-around: swap the last song with the first.
                               SongInfo temp = selectedProject.songs[total - 1];
@@ -498,7 +505,7 @@ void Input::handleRotary() {
                           ui->drawEditedSongListItem(reorderTarget, true);
                           // Update the neighbor: if rotating clockwise, update the item before reorderTarget;
                           // if counter-clockwise, update the item after.
-                          if (dtState == clkState) {
+                          if (dtState != clkState) {
                               int neighbor = (reorderTarget == 0) ? total - 1 : reorderTarget - 1;
                               ui->drawEditedSongListItem(neighbor, false);
                           } else {
@@ -512,7 +519,7 @@ void Input::handleRotary() {
                       int previousScrollOffset = scrollOffset;
                       int total = selectedProject.songCount;
                       
-                      if (dtState == clkState) {  // Clockwise: move down.
+                      if (dtState != clkState) {  // Clockwise: move down.
                           if (currentSongItem == total - 1)
                               currentSongItem = 0;
                           else
@@ -552,7 +559,7 @@ void Input::handleRotary() {
                 int total = MAX_PRESETS;
 
                 // Update currentPresetIndex with wrap-around
-                if (dtState == clkState) {  // Clockwise rotation
+                if (dtState != clkState) {  // Clockwise rotation
                     if (ui->currentPresetIndex == total - 1)
                       ui->currentPresetIndex = 0;
                     else
@@ -584,7 +591,7 @@ void Input::handleRotary() {
               case ScreenState::MENU2:
               {
                 int prevIndex = currentMenu2Item;
-                if (dtState == clkState)
+                if (dtState != clkState)
                   currentMenu2Item = (currentMenu2Item + 1) % NUM_MENU2_ITEMS;
                 else
                   currentMenu2Item = (currentMenu2Item - 1 + NUM_MENU2_ITEMS) % NUM_MENU2_ITEMS;
@@ -594,7 +601,7 @@ void Input::handleRotary() {
               case ScreenState::MENU2_WIFISETTINGS:
               {
                 int prevIndex = currentWifiMenuItem;
-                if (dtState == clkState)
+                if (dtState != clkState)
                   currentWifiMenuItem = (currentWifiMenuItem + 1) % NUM_WIFI_MENU_ITEMS;
                 else
                   currentWifiMenuItem = (currentWifiMenuItem - 1 + NUM_WIFI_MENU_ITEMS) % NUM_WIFI_MENU_ITEMS;
@@ -607,7 +614,7 @@ void Input::handleRotary() {
                     int previousScrollOffset = wifiScrollOffset;
                 
                     // Update wifiCurrentItem based on rotary encoder state.
-                    if (dtState == clkState)
+                    if (dtState != clkState)
                         wifiCurrentItem++;
                     else
                         wifiCurrentItem--;
@@ -671,6 +678,9 @@ void Input::handleRotary() {
                 default:
                     break;
             }
+            menu1Index = ui->getCurrentMenuItem();  // Update the global menu1Index variable.
+            Serial.print(F("Menu1 Index: "));
+            Serial.println(menu1Index);
             break;
           case ScreenState::NEW_SETLIST:
             if (currentProject.songCount > 0) {
@@ -696,10 +706,19 @@ void Input::handleRotary() {
             }
             break;
         case ScreenState::SELECT_SETLIST:
-            selectedPresetSlot = currentSongItem + 1;
+            selectedPresetSlot = ui->currentPresetIndex + 1;
             Serial.print(F("✅ Selected Setlist Slot via Encoder: "));
             Serial.println(selectedPresetSlot);
-            ui->setScreenState(ScreenState::SAVE_SETLIST);
+            if (menu1Index == 1) {
+                loadedPreset = ps::loadPresetFromDevice(selectedPresetSlot);
+                ui->setScreenState(ScreenState::HOME);
+            } else if (menu1Index == 3) {
+                ps::deletePresetFromDevice(selectedPresetSlot);
+                ui->setScreenState(ScreenState::HOME);
+            } else {
+                ui->setScreenState(ScreenState::SAVE_SETLIST);
+            }
+            break;
             break;
         case ScreenState::MENU2:
             if (currentMenu2Item == 0) {

@@ -370,7 +370,7 @@ void UI::drawSongList() {
     // Draw each visible song.
     for (int i = 0; i < itemsPerPage && (i + scrollOffset) < currentProject.songCount; i++) {
         int absoluteIndex = i + scrollOffset;
-        drawSongListItem(absoluteIndex, (absoluteIndex == currentMenuItem));
+        drawSongListItem(absoluteIndex, (absoluteIndex == currentSongItem));
     }
 
     // Optionally, update status text (like "x / total")
@@ -441,7 +441,7 @@ void UI::drawEditedSongList() {
         // When reordering is active, use reorderTarget for highlighting;
         // otherwise, use currentMenuItem.
         bool highlighted = isReordering ? (absoluteIndex == reorderTarget)
-                                        : (absoluteIndex == currentMenuItem);
+                                        : (absoluteIndex == currentSongItem);
         drawEditedSongListItem(absoluteIndex, highlighted);
     }
 }
@@ -461,10 +461,20 @@ void UI::drawEditedSongListItem(int absoluteIndex, bool highlighted) {
     // When reordering mode is active and the item is highlighted, use green.
     // Otherwise, highlighted items are yellow; non-highlighted items are white.
     uint16_t textColor;
-    if (isReordering && highlighted) {
-        textColor = ILI9341_GREEN;
+    // if (isReordering && highlighted) {
+    //     textColor = ILI9341_GREEN;
+    // } else {
+    //     textColor = highlighted ? ILI9341_YELLOW : ILI9341_WHITE;
+    // }
+
+    if (isReordering) {
+        // Green highlight for reordering target
+        textColor = (absoluteIndex == reorderTarget) ? ILI9341_GREEN 
+                   : ILI9341_WHITE;
     } else {
-        textColor = highlighted ? ILI9341_YELLOW : ILI9341_WHITE;
+        // Yellow highlight for normal selection
+        textColor = (absoluteIndex == currentSongItem) ? ILI9341_YELLOW 
+                   : ILI9341_WHITE;
     }
     
     tft.setTextColor(textColor, ILI9341_BLACK);
@@ -572,29 +582,89 @@ void UI::drawLoadedPreset() {
         totalTracks == 0) {
         drawText("No tracks available.", 10, textY+10, ILI9341_RED, 2);
     } else {
-        // Draw the preset name.
-        drawText(String(loadedPreset.name).c_str(), 95, 80, ILI9341_YELLOW, 2);
-        
-        // Draw the project name just below the preset name.
-        drawText(String(loadedPreset.data.projectName).c_str(), 105, 150, ILI9341_ORANGE, 2);
-        
-        // When a track is changed, force white text even if isPlaying is true.
-        uint16_t songColor;
-        if (presetChanged) {
-            songColor = ILI9341_WHITE;
+        // Draw the preset name
+        constexpr int MAX_PRESET_NAME_CHARS = 16; // Adjust based on your display needs
+        char presetDisplayName[MAX_PRESET_NAME_CHARS + 3] = {0}; // Buffer for preset name
+        const char* presetName = loadedPreset.name;
+        if (presetName != nullptr) {
+            strncpy(presetDisplayName, presetName, MAX_PRESET_NAME_CHARS);
+            presetDisplayName[MAX_PRESET_NAME_CHARS] = '\0'; // Force null-termination
+            
+            // Add ellipsis if needed
+            if (strlen(presetName) > MAX_PRESET_NAME_CHARS) {
+                if (MAX_PRESET_NAME_CHARS >= 2) {
+                    presetDisplayName[MAX_PRESET_NAME_CHARS - 1] = '.';
+                    presetDisplayName[MAX_PRESET_NAME_CHARS] = '.';
+                    presetDisplayName[MAX_PRESET_NAME_CHARS + 1] = '\0';
+                }
+            }
         } else {
-            songColor = isPlaying ? ILI9341_GREEN : ILI9341_WHITE;
+            strncpy(presetDisplayName, "Invalid Preset", sizeof(presetDisplayName));
         }
+        drawText(presetDisplayName, 95, 80, ILI9341_YELLOW, 2);
+
+        constexpr int MAX_PROJECT_NAME_CHARS = 15; // Adjust based on your display needs
+        char projectDisplayName[MAX_PROJECT_NAME_CHARS + 3] = {0}; // Buffer for project name
+        const char* projectName = loadedPreset.data.projectName;
+        if (projectName != nullptr) {
+            strncpy(projectDisplayName, projectName, MAX_PROJECT_NAME_CHARS);
+            projectDisplayName[MAX_PROJECT_NAME_CHARS] = '\0'; // Force null-termination
+            
+            // Add ellipsis if needed
+            if (strlen(projectName) > MAX_PROJECT_NAME_CHARS) {
+                if (MAX_PROJECT_NAME_CHARS >= 2) {
+                    projectDisplayName[MAX_PROJECT_NAME_CHARS - 1] = '.';
+                    projectDisplayName[MAX_PROJECT_NAME_CHARS] = '.';
+                    projectDisplayName[MAX_PROJECT_NAME_CHARS + 1] = '\0';
+                }
+            }
+        } else {
+            strncpy(projectDisplayName, "Invalid Project", sizeof(projectDisplayName));
+        }
+        drawText(projectDisplayName, 105, 150, ILI9341_ORANGE, 2);
         
-        // Draw the song name centered in the preset area.
-        drawText(String(loadedPreset.data.songs[currentTrack].songName).c_str(),
-                 15, textY+10, songColor, 3);
-        // Draw the track counter.
-        drawText((String(currentTrack + 1) + "/" + String(totalTracks)).c_str(),
-                 150, 16, ILI9341_WHITE, 2);
+        // Handle song color
+        uint16_t songColor = presetChanged ? ILI9341_WHITE : 
+                           (isPlaying ? ILI9341_GREEN : ILI9341_WHITE);
+
+        // SAFE VERSION: Proper array indexing
+        constexpr int MAX_DISPLAY_CHARS = 14;
+        char displayName[MAX_DISPLAY_CHARS + 3] = {0};  // Initialize buffer
+        
+        if (currentTrack < totalTracks) {  // Ensure valid track index
+            const char* songName = loadedPreset.data.songs[currentTrack].songName;
+            
+            if (songName != nullptr) {
+                // Truncate with safe operations
+                strncpy(displayName, songName, MAX_DISPLAY_CHARS);
+                displayName[MAX_DISPLAY_CHARS] = '\0';  // Force null-termination
+                
+                // Add ellipsis only if needed
+                if (strlen(songName) > MAX_DISPLAY_CHARS) {
+                    if (MAX_DISPLAY_CHARS >= 2) {  // Ensure room for ellipsis
+                        displayName[MAX_DISPLAY_CHARS-1] = '.';
+                        displayName[MAX_DISPLAY_CHARS] = '.';
+                        displayName[MAX_DISPLAY_CHARS+1] = '\0';
+                    }
+                }
+            } else {
+                strncpy(displayName, "Invalid Song", sizeof(displayName));
+            }
+        } else {
+            strncpy(displayName, "Invalid Track", sizeof(displayName));
+        }
+
+        // Draw the song name
+        drawText(displayName, 15, textY+10, songColor, 3);
+        
+        // Draw track counter
+        if (totalTracks > 0) {
+            drawText((String(currentTrack + 1) + "/" + String(totalTracks)).c_str(),
+                     150, 16, ILI9341_WHITE, 2);
+        }
     }
+    
     webServerManager.notifyPresetUpdate();
-    // Reset the flag after drawing.
     presetChanged = false;
 }
 
@@ -660,13 +730,12 @@ void UI::drawWiFiListItem(int absoluteIndex, bool highlighted) {
 
 void UI::checkWifiConnection() {
     if (currentState == ScreenState::MENU2_WIFICONNECTING) {
-        Serial.printf("WiFi status: %d\n", WiFi.status());
         unsigned long startAttemptTime = millis();
         // Check if the Wi-Fi connection is established.unsigned long startAttemptTime = millis();
-        const unsigned long wifiTimeout = 5000; // 5 seconds
+        const unsigned long wifiTimeout = 10000; // 5 seconds
 
         while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < wifiTimeout) {
-            delay(100); // avoid watchdog reset
+            delay(500); // avoid watchdog reset
             }
             
             // Check if connected or timeout occurred
@@ -854,6 +923,10 @@ void UI::newSetlistScreen() {
 }
 
 void UI::editSetlistScreen() {
+    currentSongItem = 0;      // Start at first item
+    scrollOffset = 0;         // Reset scroll position
+    isReordering = false;     // Ensure reordering mode is off
+
     tft.fillScreen(ILI9341_BLACK);
     drawRectButton(BACK_BUTTON_X, BACK_BUTTON_Y, BACK_BUTTON_WIDTH, BACK_BUTTON_HEIGHT, "Back");
     drawRectButton(SAVE_BUTTON_X, SAVE_BUTTON_Y, SAVE_BUTTON_WIDTH, SAVE_BUTTON_HEIGHT, "Next");

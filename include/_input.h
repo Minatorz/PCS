@@ -10,6 +10,7 @@ class Input {
 public:
   // Constructor: requires references to the touchscreen, display, and a pointer to the UI instance.
   Input(XPT2046_Touchscreen &ts, Adafruit_ILI9341 &tft, UI *uiInstance);
+  
 
   // Public interface to process touch input.
   void handleTouch();
